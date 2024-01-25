@@ -7,7 +7,7 @@ class OpenGLWidget(QOpenGLWidget):
     def __init__(self, parent=None):
         super(OpenGLWidget, self).__init__(parent)
         self.point_cloud = None
-        self.scale_factor = 3
+        self.scale_factor = 1   
         self.last_mouse_position = None
         self.rotation_x = 0
         self.rotation_y = 0
@@ -19,7 +19,7 @@ class OpenGLWidget(QOpenGLWidget):
     def paintGL(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glPushMatrix()
-        glPointSize(5)
+        glPointSize(1)
         glScalef(self.scale_factor, self.scale_factor, self.scale_factor)
         glRotatef(self.rotation_x, 1, 0, 0)
         glRotatef(self.rotation_y, 0, 1, 0)
@@ -59,3 +59,14 @@ class OpenGLWidget(QOpenGLWidget):
 
     def mouseReleaseEvent(self, event):
         self.last_mouse_position = None
+    
+    def wheelEvent(self, event):
+        angle = event.angleDelta().y()
+        scale_factor_change = 0.1  # Коэффициент изменения масштаба
+        if angle > 0:
+            self.scale_factor += scale_factor_change
+        else:
+            self.scale_factor -= scale_factor_change
+            if self.scale_factor < 0.1:  # Предотвращение слишком маленького масштаба
+                self.scale_factor = 0.1
+        self.update()
