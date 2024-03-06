@@ -2,6 +2,7 @@ from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from OpenGL.GL import *
 import open3d as o3d
 import numpy as np
+import laspy
 
 class OpenGLWidget(QOpenGLWidget):
     def __init__(self, parent=None):
@@ -13,7 +14,7 @@ class OpenGLWidget(QOpenGLWidget):
         self.rotation_y = 0
 
     def initializeGL(self):
-        glClearColor(0, 25, 0, 1)
+        glClearColor(0, 0, 0, 1)
         glEnable(GL_DEPTH_TEST)
 
     def paintGL(self):
@@ -24,19 +25,26 @@ class OpenGLWidget(QOpenGLWidget):
         glRotatef(self.rotation_x, 1, 0, 0)
         glRotatef(self.rotation_y, 0, 1, 0)
         glBegin(GL_POINTS)
+
         if self.point_cloud:
             for point in self.point_cloud.points:
-                glColor3d(point[0], point[1], point[2])
+                color = [75, 147, 235]
+                glColor3d(color[0] / 255, color[1] / 255, color[2] / 255)
                 glVertex3d(point[0], point[1], point[2])
         glEnd()
         glPopMatrix()
 
     def loadPointCloud(self, filename):
-        pcd = o3d.io.read_point_cloud(filename)
-        # Пример нормализации и центрирования облака точек
-        pcd = pcd.voxel_down_sample(voxel_size=0.0005)
-        pcd_center = pcd.get_center()
-        pcd.points = o3d.utility.Vector3dVector(np.asarray(pcd.points) - pcd_center)
+        las = laspy.read(filename)
+        # Преобразование данных точек в numpy массив
+        points = np.vstack((las.x, las.y, las.z)).transpose()
+        # Центрирование облака точек
+        pcd_center = np.mean(points, axis=0)
+        points_centered = points - pcd_center
+        # Создание объекта облака точек для open3d
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points_centered)
+        # Обновление внутреннего представления облака точек
         self.point_cloud = pcd
         self.update()  # Обновление виджета для отрисовки
 
