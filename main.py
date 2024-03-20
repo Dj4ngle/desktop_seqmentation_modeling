@@ -1,5 +1,7 @@
 from PyQt6.QtWidgets import QApplication, QMainWindow, QFileDialog
 from design import Ui_MainWindow
+from modeler import modeler
+
 
 class MyMainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
@@ -10,7 +12,9 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.selected_files = []
 
     def start_modeling(self):
-        pass
+        tmp = "temp.obj"
+        modeler(self.selected_files[0], tmp)
+        self.openGLWidget.loadModel(tmp)
 
     def select_files(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Выбрать файлы", "", "LAS files (*.las)")
