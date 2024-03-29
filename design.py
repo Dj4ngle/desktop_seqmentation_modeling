@@ -22,6 +22,9 @@ class Ui_MainWindow(object):
         self.openGLWidget = OpenGLWidget(parent=self.centralwidget)
         self.openGLWidget.setGeometry(QtCore.QRect(290, 90, 1400, 800))
         self.openGLWidget.setObjectName("openGLWidget")
+        self.listWidget = QtWidgets.QListWidget(parent=self.centralwidget)
+        self.listWidget.setGeometry(QtCore.QRect(30, 220, 231, 301))
+        self.listWidget.setObjectName("listWidget")
         MainWindow.setCentralWidget(self.centralwidget)
 
         self.retranslateUi(MainWindow)

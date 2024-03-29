@@ -8,25 +8,25 @@ import pywavefront
 class OpenGLWidget(QOpenGLWidget):
     def __init__(self, parent=None):
         super(OpenGLWidget, self).__init__(parent)
-        self.point_cloud = None
-        self.model = None
-        self.scale_factor = 1
+        self.point_clouds = {}
+        self.models = {}
+        self.scale_factor = 2
         self.last_mouse_position = None
-        self.rotation_x = 0
+        self.rotation_x = -90
         self.rotation_y = 0
 
     def initializeGL(self):
         glClearColor(0, 0, 0, 1)
         glEnable(GL_DEPTH_TEST)
 
-    def find_model_center(self):
+    def find_model_center(self, model):
         # Вычисление средних значений координат всех вершин
         sum_x = sum_y = sum_z = 0
-        for vertex in self.model.vertices:
+        for vertex in model.vertices:
             sum_x += vertex[0]
             sum_y += vertex[1]
             sum_z += vertex[2]
-        num_vertices = len(self.model.vertices)
+        num_vertices = len(model.vertices)
         center_x = sum_x / num_vertices
         center_y = sum_y / num_vertices
         center_z = sum_z / num_vertices
@@ -40,27 +40,26 @@ class OpenGLWidget(QOpenGLWidget):
         glRotatef(self.rotation_x, 1, 0, 0)
         glRotatef(self.rotation_y, 0, 1, 0)
 
-        # Отрисовка облака точек
-        glBegin(GL_POINTS)
-        if self.point_cloud:
-            for point in np.asarray(self.point_cloud.points):
+        # Отрисовка всех облаков точек
+        for point_cloud in self.point_clouds.values():
+            glBegin(GL_POINTS)
+            for point in np.asarray(point_cloud.points):
                 color = [75, 147, 235]  # Пример цвета
                 glColor3d(color[0] / 255, color[1] / 255, color[2] / 255)
                 glVertex3d(point[0], point[1], point[2])
-        glEnd()
+            glEnd()
 
-        # Отрисовка модели OBJ
-        if self.model:
-
-            #центрирование модели
-            center_x, center_y, center_z = self.find_model_center()
+        # Отрисовка всех моделей
+        for model in self.models.values():
+            # Центрирование модели (можно оптимизировать)
+            center_x, center_y, center_z = self.find_model_center(model)
             glTranslatef(-center_x, -center_y, -center_z)
 
-            for mesh in self.model.mesh_list:
+            for mesh in model.mesh_list:
                 glBegin(GL_TRIANGLES)
                 for face in mesh.faces:
                     for vertex_i in face:
-                        glVertex3f(*self.model.vertices[vertex_i])
+                        glVertex3f(*model.vertices[vertex_i])
                 glEnd()
 
         glPopMatrix()
@@ -72,16 +71,12 @@ class OpenGLWidget(QOpenGLWidget):
         points_centered = points - pcd_center
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points_centered)
-        self.point_cloud = pcd
-        # убирает модель с экрана, если была
-        self.model = None
+        self.point_clouds[filename] = pcd
         self.update()
 
     def loadModel(self, filename):
-        # Загрузка модели OBJ
-        self.model = pywavefront.Wavefront(filename, collect_faces=True)
-        # убирает облако точек с экрана, если была
-        self.point_cloud = None
+        model = pywavefront.Wavefront(filename, collect_faces=True)
+        self.models[filename] = model
         self.update()
 
     def setScaleFactor(self, scale):
