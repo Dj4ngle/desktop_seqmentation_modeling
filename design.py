@@ -4,7 +4,7 @@ from point_cloud_widget import OpenGLWidget
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(3500, 2000)
+        MainWindow.resize(1920, 1080)
         self.centralwidget = QtWidgets.QWidget(parent=MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.lineEdit = QtWidgets.QLineEdit(parent=self.centralwidget)
@@ -20,7 +20,7 @@ class Ui_MainWindow(object):
         self.label.setGeometry(QtCore.QRect(40, 180, 181, 51))
         self.label.setObjectName("label")
         self.openGLWidget = OpenGLWidget(parent=self.centralwidget)
-        self.openGLWidget.setGeometry(QtCore.QRect(290, 90, 2000, 1000))
+        self.openGLWidget.setGeometry(QtCore.QRect(290, 90, 1400, 800))
         self.openGLWidget.setObjectName("openGLWidget")
         MainWindow.setCentralWidget(self.centralwidget)
 
