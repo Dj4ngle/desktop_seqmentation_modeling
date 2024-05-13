@@ -1,4 +1,5 @@
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
+from PyQt6.QtCore import Qt
 from OpenGL.GL import *
 import open3d as o3d
 import numpy as np
@@ -47,7 +48,7 @@ class OpenGLWidget(QOpenGLWidget):
         for point_cloud in self.point_clouds.values():
             glBegin(GL_POINTS)
             for point in np.asarray(point_cloud.points):
-                # glColor3d(color[0], color[1], color[2])
+                glColor3d(color[0], color[1], color[2])
                 glVertex3d(point[0], point[1], point[2])
             glEnd()
 
@@ -90,7 +91,7 @@ class OpenGLWidget(QOpenGLWidget):
 
     def mouseMoveEvent(self, event):
         sensitivity = 0.3  # Коэффициент чувствительности вращения
-        if self.last_mouse_position:
+        if (self.last_mouse_position and event.buttons() == Qt.MouseButton.LeftButton):
             delta = event.position() - self.last_mouse_position
             self.rotation_z += delta.x() * sensitivity
             self.rotation_x += delta.y() * sensitivity
