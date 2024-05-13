@@ -1,19 +1,34 @@
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QCheckBox, QFileDialog, QListWidgetItem, QVBoxLayout, QHBoxLayout
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QCheckBox, QFileDialog, QListWidgetItem, QVBoxLayout, QHBoxLayout, QToolBar
 from PyQt6.QtGui import QAction
 from design import Ui_MainWindow, Ui_StartWindow
 from modeler import modeler
 from point_cloud_widget import OpenGLWidget
 
+def create_toolbar(parent):
+    toolbar = QToolBar("Toolbar", parent)
+    parent.addToolBar(toolbar)
+
+    action1 = QAction("Action 1", parent)
+    toolbar.addAction(action1)
+
+    action2 = QAction("Action 2", parent)
+    toolbar.addAction(action2)
+    
+    action3 = QAction("Action 3", parent)
+    toolbar.addAction(action3)
+    
+    action4 = QAction("Action 4", parent)
+    toolbar.addAction(action4)
+
+    return toolbar
+
 class StartWindow(QMainWindow, Ui_StartWindow):
     def __init__(self):
         super(StartWindow, self).__init__()
         
-        toolbar = self.addToolBar("Toolbar")
-        toolbar.addAction("Action 1")
-        toolbar.addAction("Action 2")
-        toolbar.addAction("Action 3")
-        toolbar.addAction("Action 4")
+        # Создаем тулбар
+        self.toolbar = create_toolbar(self)
         
         # Создаем центральный виджет
         central_widget = QWidget(self)
@@ -39,11 +54,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super(MyMainWindow, self).__init__()
         
-        toolbar = self.addToolBar("Toolbar")
-        toolbar.addAction("Action 1")
-        toolbar.addAction("Action 2")
-        toolbar.addAction("Action 3")
-        toolbar.addAction("Action 4")
+        # Создаем тулбар
+        self.toolbar = create_toolbar(self)
         
         self.setupUi(self)
         self.pushButton.clicked.connect(self.select_files)
