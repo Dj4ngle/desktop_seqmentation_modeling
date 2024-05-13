@@ -2,6 +2,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QMainWindow, QFileDialog, QListWidgetItem, QCheckBox
 from design import Ui_MainWindow
 from modeler import modeler
+from point_cloud_widget import OpenGLWidget
 
 
 class MyMainWindow(QMainWindow, Ui_MainWindow):
@@ -10,7 +11,11 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self.pushButton.clicked.connect(self.select_files)
         self.pushButton_2.clicked.connect(self.start_modeling)
+        self.frontViewButton.clicked.connect(self.set_front_view)
         self.selected_files = []
+
+    def set_front_view(self):
+        self.openGLWidget.resetParameters()
 
     def start_modeling(self):
         # tmp = "temp.obj"

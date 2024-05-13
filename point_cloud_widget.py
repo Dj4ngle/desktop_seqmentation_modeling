@@ -21,6 +21,14 @@ class OpenGLWidget(QOpenGLWidget):
 
         self.vbo = None
         self.num_points = 0
+        
+    def resetParameters(self):
+        self.scale_factor = 2
+        self.rotation_x = -90
+        self.rotation_y = 0
+        self.rotation_z = 0
+        self.point_cloud_position = QPointF(0, 0)
+        self.update()  # Обновляем виджет, чтобы отобразить изменения
 
     def initializeGL(self):
         glClearColor(0, 0, 0, 1)
