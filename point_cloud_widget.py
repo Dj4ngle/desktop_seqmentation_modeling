@@ -1,6 +1,6 @@
 from OpenGL.arrays import vbo
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QPointF
 from OpenGL.GL import *
 import open3d as o3d
 import numpy as np
@@ -17,6 +17,7 @@ class OpenGLWidget(QOpenGLWidget):
         self.rotation_x = -90
         self.rotation_y = 0
         self.rotation_z = 0
+        self.point_cloud_position = QPointF(0, 0)  # Текущее положение облака точек
 
         self.vbo = None
         self.num_points = 0
@@ -63,6 +64,7 @@ class OpenGLWidget(QOpenGLWidget):
         glPushMatrix()
         glPointSize(1)
         glScalef(self.scale_factor, self.scale_factor, self.scale_factor)
+        glTranslatef(self.point_cloud_position.x(), -self.point_cloud_position.y(), 0)  # Применяем смещение точки обзора
         glRotatef(self.rotation_x, 1, 0, 0)
         glRotatef(self.rotation_y, 0, 1, 0)
         glRotatef(self.rotation_z, 0, 0, 1)
@@ -118,11 +120,23 @@ class OpenGLWidget(QOpenGLWidget):
         self.last_mouse_position = event.position()
 
     def mouseMoveEvent(self, event):
-        sensitivity = 0.3  # Коэффициент чувствительности вращения
+        rotation_sensitivity = 0.3  # Коэффициент чувствительности вращения
+        shift_sensitivity = 0.001  # Коэффициент чувствительности смещения
+        
         if (self.last_mouse_position and event.buttons() == Qt.MouseButton.LeftButton):
             delta = event.position() - self.last_mouse_position
-            self.rotation_z += delta.x() * sensitivity
-            self.rotation_x += delta.y() * sensitivity
+            self.rotation_z += delta.x() * rotation_sensitivity
+            self.rotation_x += delta.y() * rotation_sensitivity
+            self.last_mouse_position = event.position()
+            self.update()
+            
+        if (self.last_mouse_position and event.buttons() == Qt.MouseButton.RightButton):
+            # delta = event.position() - self.last_mouse_position
+            # self.scene_offset = [2, 2, 0]
+            # self.last_mouse_position = event.position()
+            # self.update()
+            delta = event.position() - self.last_mouse_position
+            self.point_cloud_position += delta * shift_sensitivity
             self.last_mouse_position = event.position()
             self.update()
 
