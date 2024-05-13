@@ -1,9 +1,26 @@
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication, QMainWindow, QFileDialog, QListWidgetItem, QCheckBox
-from design import Ui_MainWindow
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QCheckBox, QFileDialog, QListWidgetItem, QVBoxLayout
+from design import Ui_MainWindow, Ui_StartWindow
 from modeler import modeler
 from point_cloud_widget import OpenGLWidget
 
+class StartWindow(QWidget, Ui_StartWindow):
+    def __init__(self):
+        super(StartWindow, self).__init__()
+        self.setupUi(self)
+        self.startButton.clicked.connect(self.openMainWindow)
+        
+        layout = QVBoxLayout()
+        layout.addStretch(1)  # Добавляем растягивающийся пружинный элемент
+        layout.addWidget(self.startButton, alignment=Qt.AlignmentFlag.AlignHCenter)  # Выравниваем кнопку по центру
+        layout.addStretch(1)  # Добавляем еще один растягивающийся пружинный элемент
+
+        self.setLayout(layout)
+
+    def openMainWindow(self):
+        self.main_window = MyMainWindow()
+        self.main_window.show()
+        self.close()
 
 class MyMainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
@@ -65,6 +82,6 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
 if __name__ == "__main__":
     app = QApplication([])
-    window = MyMainWindow()
-    window.show()
+    start_window = StartWindow()
+    start_window.show()
     app.exec()
