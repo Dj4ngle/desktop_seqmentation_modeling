@@ -14,6 +14,7 @@ class OpenGLWidget(QOpenGLWidget):
         self.last_mouse_position = None
         self.rotation_x = -90
         self.rotation_y = 0
+        self.rotation_z = 0
 
     def initializeGL(self):
         glClearColor(0, 0, 0, 1)
@@ -39,13 +40,14 @@ class OpenGLWidget(QOpenGLWidget):
         glScalef(self.scale_factor, self.scale_factor, self.scale_factor)
         glRotatef(self.rotation_x, 1, 0, 0)
         glRotatef(self.rotation_y, 0, 1, 0)
+        glRotatef(self.rotation_z, 0, 0, 1) 
 
+        color = [75 / 255, 147 / 255, 235 / 255]  # Пример цвета
         # Отрисовка всех облаков точек
         for point_cloud in self.point_clouds.values():
             glBegin(GL_POINTS)
             for point in np.asarray(point_cloud.points):
-                color = [75, 147, 235]  # Пример цвета
-                glColor3d(color[0] / 255, color[1] / 255, color[2] / 255)
+                # glColor3d(color[0], color[1], color[2])
                 glVertex3d(point[0], point[1], point[2])
             glEnd()
 
@@ -89,19 +91,18 @@ class OpenGLWidget(QOpenGLWidget):
     def mouseMoveEvent(self, event):
         sensitivity = 0.3  # Коэффициент чувствительности вращения
         if self.last_mouse_position:
-            dx = event.position().x() - self.last_mouse_position.x()
-            dy = event.position().y() - self.last_mouse_position.y()
-            self.rotation_x += dy * sensitivity
-            self.rotation_y += dx * sensitivity
+            delta = event.position() - self.last_mouse_position
+            self.rotation_z += delta.x() * sensitivity
+            self.rotation_x += delta.y() * sensitivity
+            self.last_mouse_position = event.position()
             self.update()
-        self.last_mouse_position = event.position()
 
     def mouseReleaseEvent(self, event):
         self.last_mouse_position = None
     
     def wheelEvent(self, event):
         angle = event.angleDelta().y()
-        scale_factor_change = 0.1  # Коэффициент изменения масштаба
+        scale_factor_change = 0.5  # Коэффициент изменения масштаба
         if angle > 0:
             self.scale_factor += scale_factor_change
         else:
