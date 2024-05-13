@@ -1,21 +1,34 @@
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QCheckBox, QFileDialog, QListWidgetItem, QVBoxLayout
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QCheckBox, QFileDialog, QListWidgetItem, QVBoxLayout, QHBoxLayout
+from PyQt6.QtGui import QAction
 from design import Ui_MainWindow, Ui_StartWindow
 from modeler import modeler
 from point_cloud_widget import OpenGLWidget
 
-class StartWindow(QWidget, Ui_StartWindow):
+class StartWindow(QMainWindow, Ui_StartWindow):
     def __init__(self):
         super(StartWindow, self).__init__()
+        
+        toolbar = self.addToolBar("Toolbar")
+        toolbar.addAction("Action 1")
+        toolbar.addAction("Action 2")
+        toolbar.addAction("Action 3")
+        toolbar.addAction("Action 4")
+        
+        # Создаем центральный виджет
+        central_widget = QWidget(self)
+        
         self.setupUi(self)
         self.startButton.clicked.connect(self.openMainWindow)
         
-        layout = QVBoxLayout()
-        layout.addStretch(1)  # Добавляем растягивающийся пружинный элемент
-        layout.addWidget(self.startButton, alignment=Qt.AlignmentFlag.AlignHCenter)  # Выравниваем кнопку по центру
-        layout.addStretch(1)  # Добавляем еще один растягивающийся пружинный элемент
+       # Создаем вертикальную компоновку
+        layout = QVBoxLayout(central_widget)
 
-        self.setLayout(layout)
+        # Добавляем метку в компоновку и выравниваем по центру
+        layout.addWidget(self.startButton, alignment=Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
+
+        # Устанавливаем центральный виджет в главное окно
+        self.setCentralWidget(central_widget)
 
     def openMainWindow(self):
         self.main_window = MyMainWindow()
@@ -25,6 +38,13 @@ class StartWindow(QWidget, Ui_StartWindow):
 class MyMainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super(MyMainWindow, self).__init__()
+        
+        toolbar = self.addToolBar("Toolbar")
+        toolbar.addAction("Action 1")
+        toolbar.addAction("Action 2")
+        toolbar.addAction("Action 3")
+        toolbar.addAction("Action 4")
+        
         self.setupUi(self)
         self.pushButton.clicked.connect(self.select_files)
         self.pushButton_2.clicked.connect(self.start_modeling)

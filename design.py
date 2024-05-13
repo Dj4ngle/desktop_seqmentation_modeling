@@ -3,26 +3,25 @@ from point_cloud_widget import OpenGLWidget
 
 class Ui_StartWindow(object):
     def setupUi(self, StartWindow):
-        StartWindow.setObjectName("StartWindow")
+        StartWindow.setWindowTitle("Окно входа")
         StartWindow.resize(1024, 768)
-        self.centralwidget = QtWidgets.QWidget(parent=StartWindow)
-        self.centralwidget.setObjectName("centralwidget")
-        self.startButton = QtWidgets.QPushButton(parent=self.centralwidget)
-        # self.startButton.setGeometry(QtCore.QRect(0, 0, 200, 100))
-        
-        self.retranslateUi(StartWindow)
-        QtCore.QMetaObject.connectSlotsByName(StartWindow)
-    
-    def retranslateUi(self, StartWindow):
-        _translate = QtCore.QCoreApplication.translate
-        StartWindow.setWindowTitle(_translate("StartWindow", "Окно входа"))
-        self.startButton.setText(_translate("StartWindow", "Начать"))
-        
+        StartWindow.setStyleSheet(
+            """
+            background:#000000;
+            background-color: #3F3F46;
+            color: #CCCEDB;
+                                  """)
+        self.startButton = QtWidgets.QPushButton("Начать", self)  
         
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(1920, 1080)
+        MainWindow.setStyleSheet(
+            """
+            background-color: #3F3F46;
+            color: #CCCEDB;
+                                  """)
         self.centralwidget = QtWidgets.QWidget(parent=MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.lineEdit = QtWidgets.QLineEdit(parent=self.centralwidget)
