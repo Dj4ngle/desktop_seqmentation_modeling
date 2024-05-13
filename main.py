@@ -23,13 +23,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         files, _ = QFileDialog.getOpenFileNames(self, "Выбрать файлы", "", "LAS files (*.las)")
 
         if files:
-            print(files)
-            self.lineEdit.setText("; ".join(files))
-            self.selected_files = self.lineEdit.text().split("; ")
-
-            self.listWidget.clear()  # Очистить список перед добавлением новых элементов
-
-            for file in self.selected_files:
+            for file in files:
                 # Создание нового QListWidgetItem
                 item = QListWidgetItem(self.listWidget)
 
@@ -38,6 +32,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 checkbox.setChecked(False)
 
                 checkbox.setProperty("filePath", file)
+                print("filePath ", file)
 
                 # Добавляем чекбокс в QListWidgetItem
                 self.listWidget.setItemWidget(item, checkbox)
@@ -45,6 +40,10 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 item.setSizeHint(checkbox.sizeHint())
 
                 checkbox.stateChanged.connect(self.checkbox_changed)
+
+            # Добавление новых файлов в список файлов
+            self.lineEdit.setText("; ".join(files))
+            self.selected_files.extend(self.lineEdit.text().split("; "))
 
     def checkbox_changed(self, state):
         checkbox = self.sender()

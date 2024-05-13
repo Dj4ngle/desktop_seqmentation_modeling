@@ -1,3 +1,4 @@
+from OpenGL.arrays import vbo
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from PyQt6.QtCore import Qt
 from OpenGL.GL import *
@@ -17,9 +18,32 @@ class OpenGLWidget(QOpenGLWidget):
         self.rotation_y = 0
         self.rotation_z = 0
 
+        self.vbo = None
+        self.num_points = 0
+
     def initializeGL(self):
         glClearColor(0, 0, 0, 1)
         glEnable(GL_DEPTH_TEST)
+
+        self.vbo = vbo.VBO(np.array([], dtype=np.float32))
+
+    def updatePointCloud(self, point_cloud):
+        # Получение данных точек из объекта PointCloud
+        points = np.asarray(point_cloud.points)
+
+        # Убедимся, что данные существуют
+        if points.size == 0:
+            return  # Выходим, если нет данных
+
+        # Преобразование данных точек для использования в VBO
+        if self.vbo is None:
+            self.vbo = vbo.VBO(points.astype(np.float32))
+        else:
+            self.vbo.set_array(points.astype(np.float32))
+            self.vbo.bind()
+
+        # Сохранение количества точек для последующего рендеринга
+        self.num_points = points.shape[0]
 
     def find_model_center(self, model):
         # Вычисление средних значений координат всех вершин
@@ -41,16 +65,20 @@ class OpenGLWidget(QOpenGLWidget):
         glScalef(self.scale_factor, self.scale_factor, self.scale_factor)
         glRotatef(self.rotation_x, 1, 0, 0)
         glRotatef(self.rotation_y, 0, 1, 0)
-        glRotatef(self.rotation_z, 0, 0, 1) 
+        glRotatef(self.rotation_z, 0, 0, 1)
 
-        color = [75 / 255, 147 / 255, 235 / 255]  # Пример цвета
         # Отрисовка всех облаков точек
+        # TODO добавить обработку цветов
         for point_cloud in self.point_clouds.values():
-            glBegin(GL_POINTS)
-            for point in np.asarray(point_cloud.points):
-                glColor3d(color[0], color[1], color[2])
-                glVertex3d(point[0], point[1], point[2])
-            glEnd()
+            self.updatePointCloud(point_cloud)
+
+            if self.vbo:
+                self.vbo.bind()
+                glEnableClientState(GL_VERTEX_ARRAY)
+                glVertexPointer(3, GL_FLOAT, 0, self.vbo)
+                glDrawArrays(GL_POINTS, 0, self.num_points)
+                glDisableClientState(GL_VERTEX_ARRAY)
+                self.vbo.unbind()
 
         # Отрисовка всех моделей
         for model in self.models.values():
