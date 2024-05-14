@@ -18,6 +18,7 @@ class OpenGLWidget(QOpenGLWidget):
         self.rotation_x = -90
         self.rotation_y = 0
         self.rotation_z = 0
+        self.rotation_mode = "X"
         self.point_cloud_position = QPointF(0, 0)  # Текущее положение облака точек
 
         self.vbo = None
@@ -164,17 +165,26 @@ class OpenGLWidget(QOpenGLWidget):
 
     def mousePressEvent(self, event):
         self.last_mouse_position = event.position()
+        if event.buttons() == Qt.MouseButton.MiddleButton:
+            # Изменение режима вращения при нажатии на среднюю кнопку мыши
+            self.rotation_mode = "X" if self.rotation_mode == "Z" else "Z"
+            self.update()
 
     def mouseMoveEvent(self, event):
         rotation_sensitivity = 0.3  # Коэффициент чувствительности вращения
-        shift_sensitivity = 0.002 / self.scale_factor # Коэффициент чувствительности смещения
         
         if (self.last_mouse_position and event.buttons() == Qt.MouseButton.LeftButton):
             delta = event.position() - self.last_mouse_position
-            self.rotation_z += delta.x() * rotation_sensitivity
-            self.rotation_x += delta.y() * rotation_sensitivity
+            if self.rotation_mode == "X":
+                self.rotation_z += delta.x() * rotation_sensitivity
+                self.rotation_x += delta.y() * rotation_sensitivity
+            else:
+                self.rotation_x += delta.y() * rotation_sensitivity
+                self.rotation_y += delta.x() * rotation_sensitivity
             self.last_mouse_position = event.position()
             self.update()
+            
+        shift_sensitivity = 0.00285 / self.scale_factor # Коэффициент чувствительности смещения
             
         if (self.last_mouse_position and event.buttons() == Qt.MouseButton.RightButton):
             delta = event.position() - self.last_mouse_position
