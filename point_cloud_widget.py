@@ -23,6 +23,25 @@ class OpenGLWidget(QOpenGLWidget):
         self.vbo = None
         self.num_points = 0
         
+    def resizeGL(self, width, height):
+        # Определяем размеры окна
+        if height == 0:
+            height = 1
+
+        # Устанавливаем область отображения OpenGL
+        glViewport(0, 0, width, height)
+
+        # Модифицируем проекционную матрицу так, чтобы сохранить пропорции контента
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        aspect_ratio = width / height
+        if aspect_ratio > 1:
+            glOrtho(-aspect_ratio, aspect_ratio, -1.0, 1.0, -1.0, 1.0)
+        else:
+            glOrtho(-1.0, 1.0, -1 / aspect_ratio, 1 / aspect_ratio, -1.0, 1.0)
+
+        glMatrixMode(GL_MODELVIEW)
+        
     def resetParameters(self):
         self.scale_factor = 2
         self.rotation_x = -90
@@ -173,6 +192,6 @@ class OpenGLWidget(QOpenGLWidget):
             self.scale_factor += scale_factor_change
         else:
             self.scale_factor -= scale_factor_change
-            if self.scale_factor < 0.1:  # Предотвращение слишком маленького масштаба
-                self.scale_factor = 0.1
+            if self.scale_factor < 0.01:  # Предотвращение слишком маленького масштаба
+                self.scale_factor = 0.01
         self.update()
