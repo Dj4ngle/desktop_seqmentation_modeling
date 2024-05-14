@@ -18,7 +18,7 @@ class OpenGLWidget(QOpenGLWidget):
         self.rotation_x = -90
         self.rotation_y = 0
         self.rotation_z = 0
-        self.rotation_mode = "X"
+        self.rotation_mode = "Z"
         self.point_cloud_position = QPointF(0, 0)  # Текущее положение облака точек
 
         self.vbo = None
@@ -175,12 +175,11 @@ class OpenGLWidget(QOpenGLWidget):
         
         if (self.last_mouse_position and event.buttons() == Qt.MouseButton.LeftButton):
             delta = event.position() - self.last_mouse_position
-            if self.rotation_mode == "X":
-                self.rotation_z += delta.x() * rotation_sensitivity
-                self.rotation_x += delta.y() * rotation_sensitivity
-            else:
+            if self.rotation_mode == "Z":
                 self.rotation_x += delta.y() * rotation_sensitivity
                 self.rotation_y += delta.x() * rotation_sensitivity
+            else:
+                self.rotation_z += delta.x() * rotation_sensitivity
             self.last_mouse_position = event.position()
             self.update()
             
