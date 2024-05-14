@@ -11,7 +11,13 @@ class Ui_StartWindow(object):
             background-color: #3F3F46;
             color: #CCCEDB;
                                   """)
-        self.startButton = QtWidgets.QPushButton("Начать", self)  
+        layout = QtWidgets.QVBoxLayout(StartWindow)
+                
+        self.startButton = QtWidgets.QPushButton("Начать")
+        layout.addWidget(self.startButton)
+        
+        self.openGLWidget = OpenGLWidget()
+        layout.addWidget(self.openGLWidget) 
         
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -52,9 +58,9 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "LIDAR Modeler"))
+        MainWindow.setWindowTitle(_translate("MainWindow", "LIDAR segmentation and modeling"))
         self.pushButton.setText(_translate("MainWindow", "Выбрать файлы"))
         self.pushButton_2.setText(_translate("MainWindow", "Начать моделирование"))
-        self.label.setText(_translate("MainWindow", "TextLabel"))
+        self.label.setText(_translate("MainWindow", "Файлы"))
         self.frontViewButton.setText(_translate("MainWindow", "Сбросить параметры"))
 
