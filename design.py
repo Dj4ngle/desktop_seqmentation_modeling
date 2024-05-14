@@ -16,7 +16,7 @@ class Ui_StartWindow(object):
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(1920, 1080)
+        MainWindow.resize(1600, 900)
         MainWindow.setStyleSheet(
             """
             background-color: #3F3F46;
@@ -40,7 +40,7 @@ class Ui_MainWindow(object):
         self.label.setGeometry(QtCore.QRect(40, 210, 181, 51))
         self.label.setObjectName("label")
         self.openGLWidget = OpenGLWidget(parent=self.centralwidget)
-        self.openGLWidget.setGeometry(QtCore.QRect(290, 90, 1400, 800))
+        self.openGLWidget.setGeometry(QtCore.QRect(290, 90, 1200, 700))
         self.openGLWidget.setObjectName("openGLWidget")
         self.listWidget = QtWidgets.QListWidget(parent=self.centralwidget)
         self.listWidget.setGeometry(QtCore.QRect(30, 260, 231, 301))

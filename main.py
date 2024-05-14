@@ -5,30 +5,22 @@ from design import Ui_MainWindow, Ui_StartWindow
 from modeler import modeler
 from point_cloud_widget import OpenGLWidget
 
-def create_toolbar(parent):
-    toolbar = QToolBar("Toolbar", parent)
-    parent.addToolBar(toolbar)
+class Toolbar(QToolBar):
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
-    action1 = QAction("Action 1", parent)
-    toolbar.addAction(action1)
-
-    action2 = QAction("Action 2", parent)
-    toolbar.addAction(action2)
-    
-    action3 = QAction("Action 3", parent)
-    toolbar.addAction(action3)
-    
-    action4 = QAction("Action 4", parent)
-    toolbar.addAction(action4)
-
-    return toolbar
+        self.addAction("Action 1")
+        self.addAction("Action 2")
+        self.addAction("Action 3")
+        self.addAction("Action 4")
 
 class StartWindow(QMainWindow, Ui_StartWindow):
     def __init__(self):
         super(StartWindow, self).__init__()
         
         # Создаем тулбар
-        self.toolbar = create_toolbar(self)
+        self.toolbar = Toolbar(self)
+        self.addToolBar(self.toolbar)  # Добавляем тулбар в главное окно
         
         # Создаем центральный виджет
         central_widget = QWidget(self)
@@ -55,7 +47,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         super(MyMainWindow, self).__init__()
         
         # Создаем тулбар
-        self.toolbar = create_toolbar(self)
+        self.toolbar = Toolbar(self)
+        self.addToolBar(self.toolbar)  # Добавляем тулбар в главное окно
         
         self.setupUi(self)
         self.pushButton.clicked.connect(self.select_files)
@@ -74,7 +67,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         pass
 
     def select_files(self):
-        files, _ = QFileDialog.getOpenFileNames(self, "Выбрать файлы", "", "LAS files (*.las)")
+        files, _ = QFileDialog.getOpenFileNames(self, "Выбрать файлы", "", "LAS and PCD files (*.las *.pcd)")
 
         if files:
             for file in files:

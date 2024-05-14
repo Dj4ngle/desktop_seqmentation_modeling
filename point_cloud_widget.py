@@ -6,6 +6,7 @@ import open3d as o3d
 import numpy as np
 import laspy
 import pywavefront
+import os
 
 class OpenGLWidget(QOpenGLWidget):
     def __init__(self, parent=None):
@@ -106,12 +107,30 @@ class OpenGLWidget(QOpenGLWidget):
         glPopMatrix()
 
     def loadPointCloud(self, filename):
-        las = laspy.read(filename)
-        points = np.vstack((las.x, las.y, las.z)).transpose()
+        # Определение формата файла по расширению
+        file_extension = os.path.splitext(filename)[1].lower()
+
+        if file_extension == '.las':
+            # Загрузка LAS файла
+            las = laspy.read(filename)
+            points = np.vstack((las.x, las.y, las.z)).transpose()
+        elif file_extension == '.pcd':
+            # Загрузка PCD файла
+            pcd = o3d.io.read_point_cloud(filename)
+            points = np.asarray(pcd.points)
+        else:
+            print("Unsupported file format")
+            return
+
+        # Центрирование точек
         pcd_center = np.mean(points, axis=0)
         points_centered = points - pcd_center
+
+        # Создание объекта PointCloud в Open3D
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points_centered)
+
+        # Сохранение облака точек в словарь
         self.point_clouds[filename] = pcd
         self.update()
 
@@ -129,7 +148,7 @@ class OpenGLWidget(QOpenGLWidget):
 
     def mouseMoveEvent(self, event):
         rotation_sensitivity = 0.3  # Коэффициент чувствительности вращения
-        shift_sensitivity = 0.001  # Коэффициент чувствительности смещения
+        shift_sensitivity = 0.002 / self.scale_factor # Коэффициент чувствительности смещения
         
         if (self.last_mouse_position and event.buttons() == Qt.MouseButton.LeftButton):
             delta = event.position() - self.last_mouse_position
@@ -139,10 +158,6 @@ class OpenGLWidget(QOpenGLWidget):
             self.update()
             
         if (self.last_mouse_position and event.buttons() == Qt.MouseButton.RightButton):
-            # delta = event.position() - self.last_mouse_position
-            # self.scene_offset = [2, 2, 0]
-            # self.last_mouse_position = event.position()
-            # self.update()
             delta = event.position() - self.last_mouse_position
             self.point_cloud_position += delta * shift_sensitivity
             self.last_mouse_position = event.position()
