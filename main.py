@@ -67,11 +67,10 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         # Расчет новых размеров элементов интерфейса
         new_width = self.width()
         new_height = self.height()
-        print (self.width(), self.height())
         
         button_width = new_width * 0.06
         self.openGLWidget.setGeometry(QtCore.QRect(290, 90, new_width - 320, new_height - 200))
-        self.listWidget.setGeometry(QtCore.QRect(30, 260, 231, new_height - new_height*0.3 - 210))
+        self.listWidget.setGeometry(QtCore.QRect(30, 260, 231, new_height - int(new_height*0.3) - 210))
         self.lineEdit.setGeometry(QtCore.QRect(170, 40, new_width - 210, 20))
 
     def set_front_view(self):

@@ -11,13 +11,8 @@ class Ui_StartWindow(object):
             background-color: #3F3F46;
             color: #CCCEDB;
                                   """)
-        layout = QtWidgets.QVBoxLayout(StartWindow)
                 
         self.startButton = QtWidgets.QPushButton("Начать")
-        layout.addWidget(self.startButton)
-        
-        self.openGLWidget = OpenGLWidget()
-        layout.addWidget(self.openGLWidget) 
         
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
