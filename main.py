@@ -1,7 +1,7 @@
 from PyQt6.QtCore import Qt
 from PyQt6 import QtCore
 from PyQt6.QtGui import QAction
-from design import Ui_MainWindow, Ui_StartWindow
+from design import Ui_MainWindow
 from modeler import modeler
 from point_cloud_widget import OpenGLWidget
 from PyQt6.QtWidgets import (
@@ -89,27 +89,12 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.toolbarsCreator = ToolBar(self)
         self.toolbarsCreator._createToolBars()
         
-        self.pushButton.clicked.connect(self.select_files)
-        self.pushButton_2.clicked.connect(self.start_modeling)
+        
         self.frontViewButton.clicked.connect(self.set_front_view)
         self.menuCreator.openAction.triggered.connect(self.select_files)
         self.menuCreator.exitAction.triggered.connect(QApplication.instance().quit)
         self.selected_files = []
         
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        # Обновляем размеры элементов интерфейса
-        self.resizeUI()
-    
-    def resizeUI(self):
-        # Расчет новых размеров элементов интерфейса
-        new_width = self.width()
-        new_height = self.height()
-        
-        button_width = new_width * 0.06
-        self.openGLWidget.setGeometry(QtCore.QRect(290, 90, new_width - 320, new_height - 200))
-        self.listWidget.setGeometry(QtCore.QRect(30, 260, 231, new_height - int(new_height*0.3) - 210))
-        self.lineEdit.setGeometry(QtCore.QRect(170, 40, new_width - 210, 20))
 
     def set_front_view(self):
         self.openGLWidget.resetParameters()
@@ -144,8 +129,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 checkbox.stateChanged.connect(self.checkbox_changed)
 
             # Добавление новых файлов в список файлов
-            self.lineEdit.setText("; ".join(files))
-            self.selected_files.extend(self.lineEdit.text().split("; "))
+            # self.lineEdit.setText("; ".join(files))
+            # self.selected_files.extend(self.lineEdit.text().split("; "))
 
     def checkbox_changed(self, state):
         checkbox = self.sender()
@@ -164,7 +149,7 @@ if __name__ == "__main__":
     app = QApplication([])
     
     # Применяем стили
-    app.setStyleSheet(open("style.css").read())
+    app.setStyleSheet(open("style.qss").read())
     
     main_window = MyMainWindow()
     main_window.show()

@@ -1,0 +1,72 @@
+QMenuBar{
+    background-color: #3F3F46; /* Цвет фона элементов меню */
+    color: #CCCEDB;
+}
+
+QMenuBar::item {
+    background-color: #3F3F46; /* Цвет фона элементов меню */
+    color: #CCCEDB;
+}
+
+QMenuBar::item:selected {
+    background-color: #52525a; /* Цвет фона выбранных элементов меню */ 
+    color: #CCCEDB;
+}
+
+QMenu::item {
+    background-color: #3F3F46; /* Цвет фона подэлементов меню */
+    color: #CCCEDB;
+}
+
+QMenu::item:selected {
+    background-color: #52525a; /* Цвет фона выбранных подэлементов меню */
+    color: #CCCEDB;
+}
+
+QAction::item{
+    background-color: #52525a; /* Цвет фона выбранных подэлементов меню */
+    color: #CCCEDB;
+}
+
+QToolBar{
+    background-color: #3F3F46; /* Цвет фона элементов меню */
+    color: #CCCEDB;
+    border: none; /* Полностью убрать границу */
+}
+
+QMainWindow{
+    background-color: #3F3F46; /* Цвет фона главного окна */
+    color: #CCCEDB;
+}
+
+QPushButton{
+    background-color: #3F3F46; /* Цвет фона главного окна */
+    color: #CCCEDB;
+}
+
+QListWidget{
+    background-color: #3F3F46; /* Цвет фона главного окна */
+    color: #CCCEDB;
+}
+
+QLabel{
+    background-color: #3F3F46; /* Цвет фона главного окна */
+    color: #CCCEDB;
+}
+
+/* Добавляем стили для кнопок в шапке стыкового виджета */
+QDockWidget::titleBarButton {
+    background-color: #CCCEDB;  /* Цвет фона кнопок */
+    color: #CCCEDB;
+
+}
+
+QDockWidget::titleBarButton:hover {
+    background-color: #CCCEDB;  /* Цвет фона кнопок при наведении */
+    color: #CCCEDB;
+}
+
+QDockWidget::title {
+    background-color: #52525a;  /* Цвет фона шапки */
+    color: #fff;  /* Цвет текста */
+}

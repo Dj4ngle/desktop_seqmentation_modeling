@@ -1,18 +1,8 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QDockWidget, QTextEdit,
+                             QVBoxLayout, QWidget, QPushButton, QLabel, QToolBar, QMenu, QStatusBar, QListWidget )
 from point_cloud_widget import OpenGLWidget
-
-class Ui_StartWindow(object):
-    def setupUi(self, StartWindow):
-        StartWindow.setWindowTitle("Окно входа")
-        StartWindow.resize(1024, 768)
-        StartWindow.setStyleSheet(
-            """
-            background:#000000;
-            background-color: #3F3F46;
-            color: #CCCEDB;
-                                  """)
-                
-        self.startButton = QtWidgets.QPushButton("Начать")
+from PyQt6.QtCore import Qt
         
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -23,39 +13,60 @@ class Ui_MainWindow(object):
             background-color: #3F3F46;
             color: #CCCEDB;
                                   """)
+        # Центральный виджет
         self.centralwidget = QtWidgets.QWidget(parent=MainWindow)
         self.centralwidget.setObjectName("centralwidget")
-        self.lineEdit = QtWidgets.QLineEdit(parent=self.centralwidget)
-        self.lineEdit.setGeometry(QtCore.QRect(170, 40, 471, 20))
-        self.lineEdit.setObjectName("lineEdit")
-        self.pushButton = QtWidgets.QPushButton(parent=self.centralwidget)
-        self.pushButton.setGeometry(QtCore.QRect(60, 40, 101, 21))
-        self.pushButton.setObjectName("pushButton")
-        self.pushButton_2 = QtWidgets.QPushButton(parent=self.centralwidget)
-        self.pushButton_2.setGeometry(QtCore.QRect(60, 90, 211, 81))
-        self.pushButton_2.setObjectName("pushButton_2")
-        self.frontViewButton = QtWidgets.QPushButton(parent=self.centralwidget)
-        self.frontViewButton.setGeometry(QtCore.QRect(60, 180, 130, 31))
-        self.frontViewButton.setObjectName("frontViewButton")
-        self.label = QtWidgets.QLabel(parent=self.centralwidget)
-        self.label.setGeometry(QtCore.QRect(40, 210, 181, 51))
-        self.label.setObjectName("label")
+        # Создаем вертикальную компоновку для centralwidget
+        self.centralLayout = QVBoxLayout(self.centralwidget)
+        self.centralLayout.setContentsMargins(0, 0, 0, 0)  # Убираем отступы
+        
         self.openGLWidget = OpenGLWidget(parent=self.centralwidget)
-        self.openGLWidget.setGeometry(QtCore.QRect(290, 90, 1200, 700))
         self.openGLWidget.setObjectName("openGLWidget")
-        self.listWidget = QtWidgets.QListWidget(parent=self.centralwidget)
-        self.listWidget.setGeometry(QtCore.QRect(30, 260, 231, 301))
-        self.listWidget.setObjectName("listWidget")
+        self.centralLayout.addWidget(self.openGLWidget)
+        
         MainWindow.setCentralWidget(self.centralwidget)
 
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
+        
+        # Стыковочные виджеты
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.createFilesDockWidget())
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.createDockWidget('Свойства'))
+        consoleDock = self.createDockWidget('Консоль')
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, consoleDock)
+        
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "LIDAR segmentation and modeling"))
-        self.pushButton.setText(_translate("MainWindow", "Выбрать файлы"))
-        self.pushButton_2.setText(_translate("MainWindow", "Начать моделирование"))
-        self.label.setText(_translate("MainWindow", "Файлы"))
-        self.frontViewButton.setText(_translate("MainWindow", "Сбросить параметры"))
+        
+        
+    def createDockWidget(self, title):
+        dock = QDockWidget(title)
+        dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+        widget = QWidget()
+        layout = QVBoxLayout()
+        label = QLabel(f"Content of {title}")
+        button = QPushButton("Click me")
+        layout.addWidget(label)
+        layout.addWidget(button)
+        widget.setLayout(layout)
+        dock.setWidget(widget)
+        return dock
+    
+    def createFilesDockWidget(self):
+        dock = QDockWidget('Файлы')
+        dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+        widget = QWidget()
+        layout = QVBoxLayout()
 
+        # Добавляем QListWidget и QPushButton в стыковочный виджет
+        self.listWidget = QListWidget()
+        self.frontViewButton = QPushButton("Сбросить параметры")
+        
+        layout.addWidget(self.listWidget)
+        layout.addWidget(self.frontViewButton)
+
+        widget.setLayout(layout)
+        dock.setWidget(widget)
+        return dock
