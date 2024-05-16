@@ -1,28 +1,94 @@
 from PyQt6.QtCore import Qt
 from PyQt6 import QtCore
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QCheckBox, QFileDialog, QListWidgetItem, QVBoxLayout, QHBoxLayout, QToolBar
 from PyQt6.QtGui import QAction
 from design import Ui_MainWindow, Ui_StartWindow
 from modeler import modeler
 from point_cloud_widget import OpenGLWidget
+from PyQt6.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QCheckBox,
+    QFileDialog,
+    QListWidgetItem,
+    QVBoxLayout,
+    QHBoxLayout,
+    QToolBar,
+    QMenuBar,
+    QMenu,
+    QStatusBar,
+    )
 
-class Toolbar(QToolBar):
+class MenuBar:
     def __init__(self, parent=None):
-        super().__init__(parent)
+        self.parent = parent
+        
+    def _createMenuBar(self):
+        menuBar = QMenuBar(self.parent)
+        self.parent.setMenuBar(menuBar)
+        # Creating File menu using a QMenu object
+        fileMenu = QMenu("Файл", self.parent)
+        menuBar.addMenu(fileMenu)
+        # fileMenu.addAction(self.newAction)
+        fileMenu.addAction(self.openAction)
+        fileMenu.addAction(self.saveAction)
+        fileMenu.addAction(self.exitAction)
+        # Edit menu
+        editMenu = menuBar.addMenu("Правка")
+        # Color submenu in the Edit menu
+        findMenu = editMenu.addMenu("Цвет")
+        findMenu.addAction(self.selectFromListAction)
+        findMenu.addAction(self.createNewColorAction)
+        # Help menu
+        helpMenu = menuBar.addMenu("Помощь")
+        helpMenu.addAction(self.helpContentAction)
+        helpMenu.addAction(self.aboutAction)
+        
+    def _createActions(self):
+        # Creating action using the first constructor
+        # self.newAction = QAction(self)
+        # self.newAction.setText("&New")
+        # Creating actions using the second constructor
+        # Действия в меню "Файл"
+        self.openAction = QAction("Открыть", self.parent)
+        self.saveAction = QAction("Сохранить", self.parent)
+        self.exitAction = QAction("Выйти", self.parent)
+        # Действия в меню "Правка"
+        self.colorAction = QAction("Цвет", self.parent)
+        # Действия в подменю "Цвет"
+        self.selectFromListAction = QAction("Выбрать из списка", self.parent)
+        self.createNewColorAction = QAction("Создать новый цвет", self.parent)
+        # Действия в меню "Помощь"
+        self.helpContentAction = QAction("Справочный материал", self.parent)
+        self.aboutAction = QAction("О приложении", self.parent)
 
-        self.addAction("Action 1")
-        self.addAction("Action 2")
-        self.addAction("Action 3")
-        self.addAction("Action 4")
+class ToolBar:
+    def __init__(self, parent=None):
+        self.parent = parent
+
+    def _createToolBars(self):
+        # Using a title
+        # fileToolBar = self.addToolBar("File")
+        # Using a QToolBar object
+        editToolBar = QToolBar("Edit", self.parent)
+        self.parent.addToolBar(editToolBar)
+        # Using a QToolBar object and a toolbar area
+        helpToolBar = QToolBar("Help", self.parent)
+        self.parent.addToolBar(Qt.ToolBarArea.LeftToolBarArea, helpToolBar)
 
 class StartWindow(QMainWindow, Ui_StartWindow):
     def __init__(self):
         super(StartWindow, self).__init__()
         self.setupUi(self)
         self.startButton.clicked.connect(self.openMainWindow)
-        # Создаем тулбар
-        self.toolbar = Toolbar(self)
-        self.addToolBar(self.toolbar)  # Добавляем тулбар в главное окно
+        
+        # Создание меню
+        self.menuCreator = MenuBar(self)
+        self.menuCreator._createActions()
+        self.menuCreator._createMenuBar()
+        # Создание панелеи инструментов
+        self.toolbarsCreator = ToolBar(self)
+        self.toolbarsCreator._createToolBars()
         
         # Создаем центральный виджет
         central_widget = QWidget(self)
@@ -38,6 +104,8 @@ class StartWindow(QMainWindow, Ui_StartWindow):
 
         # Устанавливаем центральный виджет в главное окно
         self.setCentralWidget(central_widget)
+        
+
 
     def openMainWindow(self):
         self.main_window = MyMainWindow()
@@ -48,11 +116,15 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super(MyMainWindow, self).__init__()
         
-        # Создаем тулбар
-        self.toolbar = Toolbar(self)
-        self.addToolBar(self.toolbar)  # Добавляем тулбар в главное окно
-        
         self.setupUi(self)
+        # Создание меню
+        self.menuCreator = MenuBar(self)
+        self.menuCreator._createActions()
+        self.menuCreator._createMenuBar()
+        # Создание панелеи инструментов
+        self.toolbarsCreator = ToolBar(self)
+        self.toolbarsCreator._createToolBars()
+        
         self.pushButton.clicked.connect(self.select_files)
         self.pushButton_2.clicked.connect(self.start_modeling)
         self.frontViewButton.clicked.connect(self.set_front_view)
