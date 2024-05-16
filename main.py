@@ -76,42 +76,6 @@ class ToolBar:
         helpToolBar = QToolBar("Help", self.parent)
         self.parent.addToolBar(Qt.ToolBarArea.LeftToolBarArea, helpToolBar)
 
-class StartWindow(QMainWindow, Ui_StartWindow):
-    def __init__(self):
-        super(StartWindow, self).__init__()
-        self.setupUi(self)
-        self.startButton.clicked.connect(self.openMainWindow)
-        
-        # Создание меню
-        self.menuCreator = MenuBar(self)
-        self.menuCreator._createActions()
-        self.menuCreator._createMenuBar()
-        # Создание панелеи инструментов
-        self.toolbarsCreator = ToolBar(self)
-        self.toolbarsCreator._createToolBars()
-        
-        # Создаем центральный виджет
-        central_widget = QWidget(self)
-        
-        self.setupUi(self)
-        self.startButton.clicked.connect(self.openMainWindow)
-        
-       # Создаем вертикальную компоновку
-        layout = QVBoxLayout(central_widget)
-
-        # Добавляем метку в компоновку и выравниваем по центру
-        layout.addWidget(self.startButton, alignment=Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
-
-        # Устанавливаем центральный виджет в главное окно
-        self.setCentralWidget(central_widget)
-        
-
-
-    def openMainWindow(self):
-        self.main_window = MyMainWindow()
-        self.main_window.show()
-        self.close()
-
 class MyMainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super(MyMainWindow, self).__init__()
@@ -128,6 +92,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.pushButton.clicked.connect(self.select_files)
         self.pushButton_2.clicked.connect(self.start_modeling)
         self.frontViewButton.clicked.connect(self.set_front_view)
+        self.menuCreator.openAction.triggered.connect(self.select_files)
+        self.menuCreator.exitAction.triggered.connect(QApplication.instance().quit)
         self.selected_files = []
         
     def resizeEvent(self, event):
@@ -196,6 +162,10 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
 if __name__ == "__main__":
     app = QApplication([])
-    start_window = StartWindow()
-    start_window.show()
+    
+    # Применяем стили
+    app.setStyleSheet(open("style.css").read())
+    
+    main_window = MyMainWindow()
+    main_window.show()
     app.exec()
