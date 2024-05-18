@@ -59,6 +59,10 @@ class OpenGLWidget(QOpenGLWidget):
 
         # Сохранение облака точек в словарь
         self.point_clouds[filename] = pcd
+        
+        # Вычисление и установка масштабного коэффициента
+        self.scale_factor = self.calculate_scale_factor(points_centered)
+    
         self.update()
         
     def resizeGL(self, width, height):
@@ -130,6 +134,21 @@ class OpenGLWidget(QOpenGLWidget):
         center_y = sum_y / num_vertices
         center_z = sum_z / num_vertices
         return center_x, center_y, center_z
+    
+    def calculate_scale_factor(self, points):
+        # Находим максимальные и минимальные значения координат точек
+        min_coords = np.min(points, axis=0)
+        max_coords = np.max(points, axis=0)
+        
+        # Вычисляем размеры по каждой оси
+        size = max_coords - min_coords
+        
+        # Находим максимальный размер
+        max_size = np.max(size)
+        
+        # Вычисляем масштабный коэффициент
+        scale_factor = 1.5 / max_size
+        return scale_factor
 
     def paintGL(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -193,6 +212,13 @@ class OpenGLWidget(QOpenGLWidget):
             # Изменение режима вращения при нажатии на среднюю кнопку мыши
             self.rotation_mode = "X" if self.rotation_mode == "Z" else "Z"
             self.update()
+            
+    def normalize_angle(self, angle):
+        while angle < 0:
+            angle += 360
+        while angle >= 360:
+            angle -= 360
+        return angle
 
     def mouseMoveEvent(self, event):
         rotation_sensitivity = 0.3  # Коэффициент чувствительности вращения
@@ -204,6 +230,12 @@ class OpenGLWidget(QOpenGLWidget):
                 self.rotation_y += delta.x() * rotation_sensitivity
             else:
                 self.rotation_z += delta.x() * rotation_sensitivity
+                
+            # Нормализуем углы поворота
+            self.rotation_x = self.normalize_angle(self.rotation_x)
+            self.rotation_y = self.normalize_angle(self.rotation_y)
+            self.rotation_z = self.normalize_angle(self.rotation_z)
+            
             self.last_mouse_position = event.position()
             self.update()
             
