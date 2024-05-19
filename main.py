@@ -1,7 +1,7 @@
 import sys
 from PyQt6.QtCore import Qt
 from PyQt6 import QtCore
-from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QAction, QIcon
 from design import Ui_MainWindow
 from modeler import modeler
 from point_cloud_widget import OpenGLWidget
@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QMenuBar,
     QMenu,
     QStatusBar,
+    QToolTip,
     )
 
 class MenuBar:
@@ -71,11 +72,29 @@ class ToolBar:
         # Using a title
         # fileToolBar = self.addToolBar("File")
         # Using a QToolBar object
-        editToolBar = QToolBar("Edit", self.parent)
+        editToolBar = QToolBar("Панель управления взаимодействия", self.parent)
+        editToolBar.addAction(self.earthExtractionAction)
         self.parent.addToolBar(editToolBar)
         # Using a QToolBar object and a toolbar area
-        helpToolBar = QToolBar("Help", self.parent)
-        self.parent.addToolBar(Qt.ToolBarArea.LeftToolBarArea, helpToolBar)
+        interactionToolBar = QToolBar("Панел управления вращения", self.parent)
+        interactionToolBar.addAction(self.frontViewAction)
+        self.parent.addToolBar(Qt.ToolBarArea.LeftToolBarArea, interactionToolBar)
+        
+    def _createActions(self):
+        self.earthExtractionAction = QAction(QIcon("images/FrontView.png"), "Earth extraction", self.parent)
+        self.earthExtractionAction.setToolTip("Это подсказка с использованием стилей CSS")
+        self.frontViewAction = QAction(QIcon("images/view.png"), "Front view", self.parent)
+        # self.saveAction = QAction(QIcon("images/view.png"))
+        # self.exitAction = QAction("Выйти", self.parent)
+        # # Действия в меню "Правка"
+        # self.colorAction = QAction("Цвет", self.parent)
+        # # Действия в подменю "Цвет"
+        # self.selectFromListAction = QAction("Выбрать из списка", self.parent)
+        # self.createNewColorAction = QAction("Создать новый цвет", self.parent)
+        # # Действия в меню "Помощь"
+        # self.helpContentAction = QAction("Справочный материал", self.parent)
+        # self.aboutAction = QAction("О приложении", self.parent)
+
         
 class ConsoleOutput:
     def __init__(self, console_widget):
@@ -108,6 +127,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.menuCreator._createMenuBar()
         # Создание панелеи инструментов
         self.toolbarsCreator = ToolBar(self)
+        self.toolbarsCreator._createActions()
         self.toolbarsCreator._createToolBars()
         
         

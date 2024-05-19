@@ -33,11 +33,6 @@ class Ui_MainWindow(object):
         MainWindow.setObjectName("MainWindow")
         MainWindow.setWindowTitle("LIDAR segmentation and modeling")
         MainWindow.resize(1600, 900)
-        MainWindow.setStyleSheet(
-            """
-            background-color: #3F3F46;
-            color: #CCCEDB;
-                                  """)
         # Центральный виджет
         self.centralwidget = QtWidgets.QWidget(parent=MainWindow)
         self.centralwidget.setObjectName("centralwidget")
@@ -49,6 +44,7 @@ class Ui_MainWindow(object):
         self.openGLWidget = OpenGLWidget(parent=self.centralwidget)
         self.openGLWidget.setObjectName("openGLWidget")
         self.centralLayout.addWidget(self.openGLWidget)
+        
         
         MainWindow.setCentralWidget(self.centralwidget)
 

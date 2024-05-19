@@ -13,6 +13,12 @@ QMenuBar::item:selected {
     color: #CCCEDB;
 }
 
+QMenu {
+    background-color: #3F3F46; /* Цвет фона подэлементов меню */
+    color: #CCCEDB;
+    border:none;
+}
+
 QMenu::item {
     background-color: #3F3F46; /* Цвет фона подэлементов меню */
     color: #CCCEDB;
@@ -33,10 +39,23 @@ QAction::item{
     color: #CCCEDB;
 }
 
+QToolButton:hover {
+    background-color: #52525a;
+}
+
+QToolButton:pressed {
+    background-color: #66666d;
+}
+
 QToolBar{
     background-color: #3F3F46; /* Цвет фона элементов меню */
     color: #CCCEDB;
     border: none; /* Полностью убрать границу */
+}
+
+QToolTip {
+    background-color: #494950; /* Цвет фона подсказки */
+    color: #CCCEDB;
 }
 
 QMainWindow{
@@ -59,10 +78,16 @@ QLabel{
     color: #CCCEDB;
 }
 
+QDockWidget{
+    background-color: #494950;
+    color: #CCCEDB;
+}
+
 QDockWidget::title {
     text-align: left;
     background-color: #494950;  /* Цвет фона шапки */
     padding: 1px;
+    color: #CCCEDB;
 }
 
 QDockWidget::close-button, QDockWidget::float-button {
@@ -76,4 +101,11 @@ QDockWidget::close-button:hover, QDockWidget::float-button:hover {
 
 QDockWidget::close-button:pressed, QDockWidget::float-button:pressed {
     background-color: #66666d;
+}
+
+QPlainTextEdit{
+    background-color: #3F3F46;
+    color: #CCCEDB;
+    border-color: #CCCEDB;
+    padding: 10px;
 }
