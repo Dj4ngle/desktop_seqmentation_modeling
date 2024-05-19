@@ -71,6 +71,22 @@ QPushButton{
 QListWidget{
     background-color: #3F3F46; /* Цвет фона главного окна */
     color: #CCCEDB;
+    border: 2px solid #494950;
+    padding:5px;
+}
+
+QCheckBox {
+    background-color: #3F3F46; /* Цвет фона флажка */
+    color: #CCCEDB; /* Цвет текста */
+    spacing: 5px; /* Отступ между флажком и текстом */
+}
+
+QScrollBar:horizontal {
+    background: #3F3F46; /* Цвет фона вертикальной полосы прокрутки */
+}
+
+QScrollBar:vertical {
+    background: #3F3F46; /* Цвет фона вертикальной полосы прокрутки */
 }
 
 QLabel{
@@ -106,6 +122,6 @@ QDockWidget::close-button:pressed, QDockWidget::float-button:pressed {
 QPlainTextEdit{
     background-color: #3F3F46;
     color: #CCCEDB;
-    border-color: #CCCEDB;
-    padding: 10px;
+    margin: 10px;
+    border: 2px solid #494950;
 }
