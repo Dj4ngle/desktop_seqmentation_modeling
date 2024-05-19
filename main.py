@@ -1,3 +1,4 @@
+import sys
 from PyQt6.QtCore import Qt
 from PyQt6 import QtCore
 from PyQt6.QtGui import QAction
@@ -75,12 +76,32 @@ class ToolBar:
         # Using a QToolBar object and a toolbar area
         helpToolBar = QToolBar("Help", self.parent)
         self.parent.addToolBar(Qt.ToolBarArea.LeftToolBarArea, helpToolBar)
+        
+class ConsoleOutput:
+    def __init__(self, console_widget):
+        self.console_widget = console_widget
+        self.stdout = sys.stdout
+        self.stderr = sys.stderr
+
+    def write(self, message):
+        # Передаем сообщение в стандартный вывод
+        self.stdout.write(message)
+        self.stdout.flush()  # Обязательно вызываем flush, чтобы сообщение сразу же отобразилось в консоли
+
+        # Отображаем сообщение в виджете консоли
+        self.console_widget.write(message)
+
+    def flush(self):
+        self.stdout.flush()
+        self.console_widget.flush()
 
 class MyMainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super(MyMainWindow, self).__init__()
         
         self.setupUi(self)
+        self.consoleWidget = self.getConsoleWidget()  # Получаем consoleWidget
+        self.redirect_console_output()
         # Создание меню
         self.menuCreator = MenuBar(self)
         self.menuCreator._createActions()
@@ -119,7 +140,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 checkbox.setChecked(False)
 
                 checkbox.setProperty("filePath", file)
-                print("filePath ", file)
+                print(f"Загружен файл: {file}")
 
                 # Добавляем чекбокс в QListWidgetItem
                 self.listWidget.setItemWidget(item, checkbox)
@@ -143,7 +164,10 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 if file_path in self.openGLWidget.point_clouds:
                     del self.openGLWidget.point_clouds[file_path]
                     self.openGLWidget.update()
-
+                    
+    def redirect_console_output(self):
+        sys.stdout = ConsoleOutput(self.consoleWidget)
+        sys.stderr = ConsoleOutput(self.consoleWidget)
 
 if __name__ == "__main__":
     app = QApplication([])
