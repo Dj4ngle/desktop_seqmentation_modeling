@@ -78,12 +78,21 @@ class ToolBar:
         # Using a QToolBar object and a toolbar area
         interactionToolBar = QToolBar("Панел управления вращения", self.parent)
         interactionToolBar.addAction(self.frontViewAction)
+        interactionToolBar.addAction(self.backViewAction)
+        interactionToolBar.addAction(self.leftSideViewAction)
+        interactionToolBar.addAction(self.rightSideViewAction)
+        interactionToolBar.addAction(self.topViewAction)
+        interactionToolBar.addAction(self.bottomViewAction)
         self.parent.addToolBar(Qt.ToolBarArea.LeftToolBarArea, interactionToolBar)
         
     def _createActions(self):
-        self.earthExtractionAction = QAction(QIcon("images/FrontView.png"), "Earth extraction", self.parent)
-        self.earthExtractionAction.setToolTip("Это подсказка с использованием стилей CSS")
-        self.frontViewAction = QAction(QIcon("images/view.png"), "Front view", self.parent)
+        self.earthExtractionAction = QAction(QIcon("images/FrontView.png"), "Удаление земли", self.parent)
+        self.frontViewAction = QAction(QIcon("images/FrontView.png"), "Вид спереди", self.parent)
+        self.backViewAction = QAction(QIcon("images/BackView.png"), "Вид сзади", self.parent)
+        self.leftSideViewAction = QAction(QIcon("images/SideViewLeft.png"), "Вид сбоку", self.parent)
+        self.rightSideViewAction = QAction(QIcon("images/SideViewRight.png"), "Вид сбоку", self.parent)
+        self.topViewAction = QAction(QIcon("images/TopView.png"), "Вид сверху", self.parent)
+        self.bottomViewAction = QAction(QIcon("images/BottomView.png"), "Вид снизу", self.parent)
         # self.saveAction = QAction(QIcon("images/view.png"))
         # self.exitAction = QAction("Выйти", self.parent)
         # # Действия в меню "Правка"
@@ -117,6 +126,8 @@ class ConsoleOutput:
 class MyMainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super(MyMainWindow, self).__init__()
+        
+        self.setWindowIcon(QIcon("images/Icon.png"))
         
         self.setupUi(self)
         self.consoleWidget = self.getConsoleWidget()  # Получаем consoleWidget
