@@ -116,7 +116,7 @@ QCheckBox::indicator:checked {
     background-color: #66666d; /* Цвет фона флажка, когда выбран */
     border: 1px solid #1E88E5; /* Границы флажка, когда выбран */
     border-radius: 3px; /* Скругление углов флажка */
-    image: url(images/check1.png);
+    image: url(images/check1True.png);
     width:11px;
     height:11px;
 }
