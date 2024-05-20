@@ -75,6 +75,7 @@ class ToolBar:
         # Using a QToolBar object
         editToolBar = QToolBar("Панель управления взаимодействия", self.parent)
         editToolBar.addAction(self.earthExtractionAction)
+        editToolBar.addAction(self.earthTEST)
         self.parent.addToolBar(editToolBar)
         # Using a QToolBar object and a toolbar area
         interactionToolBar = QToolBar("Панел управления вращения", self.parent)
@@ -88,6 +89,7 @@ class ToolBar:
         
     def _createActions(self):
         self.earthExtractionAction = QAction(QIcon("images/FrontView.png"), "Удаление земли", self.parent)
+        self.earthTEST = QAction(QIcon("images/check1True.png"), "Тестирование", self.parent)
         self.frontViewAction = QAction(QIcon("images/FrontView.png"), "Вид спереди", self.parent)
         self.backViewAction = QAction(QIcon("images/BackView.png"), "Вид сзади", self.parent)
         self.leftSideViewAction = QAction(QIcon("images/SideViewLeft.png"), "Вид сбоку", self.parent)
@@ -140,11 +142,19 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.frontViewButton.clicked.connect(self.set_front_view)
         self.menuCreator.openAction.triggered.connect(self.select_files)
         self.menuCreator.exitAction.triggered.connect(QApplication.instance().quit)
-        self.toolbarsCreator.earthExtractionAction.triggered.connect(self.toggle_dock_widget)
+        self.toolbarsCreator.earthExtractionAction.triggered.connect(lambda:
+                                                                     self.toggleDockWidget('sampleDock',
+                                                                        self.GroundExtractionDockWidget,
+                                                                        Qt.DockWidgetArea.RightDockWidgetArea))
+        self.toolbarsCreator.earthTEST.triggered.connect(lambda:
+                                                         self.toggleDockWidget('sampleDock',
+                                                            self.ConsoleDockWidget,
+                                                            Qt.DockWidgetArea.RightDockWidgetArea))
         self.toolbarsCreator.frontViewAction.triggered.connect(self.set_front_view)
         
         self.selected_files = []
-        
+        self.dockWidgets = {}
+
 
     def set_front_view(self):
         self.openGLWidget.resetParameters()
@@ -193,18 +203,16 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
     def redirect_console_output(self):
         sys.stdout = ConsoleOutput(self.consoleWidget)
         sys.stderr = ConsoleOutput(self.consoleWidget)
-        
-    def toggle_dock_widget(self):
-        # Проверяем, существует ли DockWidget "Удаление земли"
-        if self.groundExtractionDock is None:
-            # Если DockWidget не существует, создаем его и добавляем
-            self.groundExtractionDock = self.GroundExtractionDockWidget()
-            self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.groundExtractionDock)
+
+    def toggleDockWidget(self, widget_id, create_widget_func, dock_area):
+        if widget_id in self.dockWidgets:
+            dock_widget = self.dockWidgets.pop(widget_id)
+            self.removeDockWidget(dock_widget)
+            dock_widget.deleteLater()
         else:
-            # Если DockWidget существует, удаляем его
-            self.removeDockWidget(self.groundExtractionDock)
-            self.groundExtractionDock.setParent(None)
-            self.groundExtractionDock = None
+            dock_widget = create_widget_func()
+            self.addDockWidget(dock_area, dock_widget)
+            self.dockWidgets[widget_id] = dock_widget
 
 
 if __name__ == "__main__":
