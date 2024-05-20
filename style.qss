@@ -6,6 +6,12 @@ QMenuBar{
 QMenuBar::item {
     background-color: #3F3F46; /* Цвет фона элементов меню */
     color: #CCCEDB;
+    padding-top: 4px;
+    padding-right: 7px;
+    padding-bottom: 4px;
+    padding-left: 7px;
+    border: 1px solid #3F3F46; /* Границы флажка, когда выбран */
+    border-radius: 7px; /* Скругление углов флажка */
 }
 
 QMenuBar::item:selected {
@@ -79,6 +85,33 @@ QCheckBox {
     background-color: #3F3F46; /* Цвет фона флажка */
     color: #CCCEDB; /* Цвет текста */
     spacing: 5px; /* Отступ между флажком и текстом */
+}
+
+QCheckBox:checked {
+    background-color: #3F3F46; /* Цвет фона флажка */
+    color: #1E88E5; /* Цвет текста */
+    spacing: 5px; /* Отступ между флажком и текстом */
+}
+
+QCheckBox::indicator:unchecked {
+    background-color: #494950; /* Цвет фона флажка, когда не выбран */
+    border: 1px solid #494950; /* Границы флажка, когда выбран */
+    border-radius: 3px; /* Скругление углов флажка */
+}
+
+QCheckBox::indicator:pressed {
+    background-color: #52525a; /* Цвет фона флажка, когда выбран */
+    border: 1px solid #52525a; /* Границы флажка, когда выбран */
+    border-radius: 3px; /* Скругление углов флажка */
+}
+
+QCheckBox::indicator:checked {
+    background-color: #66666d; /* Цвет фона флажка, когда выбран */
+    border: 1px solid #1E88E5; /* Границы флажка, когда выбран */
+    border-radius: 3px; /* Скругление углов флажка */
+    image: url(images/check1.png);
+    width:11px;
+    height:11px;
 }
 
 QScrollBar:horizontal {
