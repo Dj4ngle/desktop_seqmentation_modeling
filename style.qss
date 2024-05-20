@@ -28,6 +28,13 @@ QMenu {
 QMenu::item {
     background-color: #3F3F46; /* Цвет фона подэлементов меню */
     color: #CCCEDB;
+    padding-top: 4px;
+    padding-right: 15px;
+    padding-bottom: 4px;
+    padding-left: 7px;
+    border: 1px solid #3F3F46; /* Границы флажка, когда выбран */
+    border-radius: 7px; /* Скругление углов флажка */
+    
 }
 
 QMenu::item:selected {
