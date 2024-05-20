@@ -4,29 +4,6 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QDockWidget, QTextEdit,
 from point_cloud_widget import OpenGLWidget
 from PyQt6.QtCore import Qt
 from datetime import datetime, timedelta
-
-class ConsoleWidget(QPlainTextEdit):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setReadOnly(True)
-
-    def write(self, message):
-        # Проверяем, является ли сообщение строкой
-        if (isinstance(message, str) and message != '\n'):
-            # Получаем текущее время с учетом часового пояса UTC+3
-            time_now = datetime.utcnow() + timedelta(hours=3)
-            # Форматируем время в строку
-            time_str = time_now.strftime("%Y-%m-%d %H:%M:%S")
-            # Добавляем дату к сообщению
-            message_with_time = f"[{time_str}] {message}"
-            # Отображаем сообщение в виджете консоли
-            self.appendPlainText(message_with_time.strip())
-        elif message != '\n':
-            # Если сообщение не является строкой, просто выводим его как есть
-            self.appendPlainText(str(message))
-
-    def flush(self):
-        pass
         
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -51,12 +28,10 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
         
         # Стыковочные виджеты
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.FilesDockWidget())
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.DockWidget('Свойства'))
-        self.consoleDock = self.ConsoleDockWidget()
-        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.consoleDock)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.files_dock_widget())
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.dock_widget('Свойства'))
         
-    def DockWidget(self, title):
+    def dock_widget(self, title):
         dock = QDockWidget(title)
         dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
         widget = QWidget()
@@ -69,7 +44,7 @@ class Ui_MainWindow(object):
         dock.setWidget(widget)
         return dock
     
-    def FilesDockWidget(self):
+    def files_dock_widget(self):
         dock = QDockWidget('Файлы')
         dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
         widget = QWidget()
@@ -86,27 +61,56 @@ class Ui_MainWindow(object):
         dock.setWidget(widget)
         return dock
     
-    def ConsoleDockWidget(self):
-        dock = QDockWidget('Консоль')
-        dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
-        self.consoleWidget = ConsoleWidget()
-        dock.setWidget(self.consoleWidget)
-        return dock
-    
-    def GroundExtractionDockWidget(self):
+    def ground_extraction_dock_widget(self):
         dock = QDockWidget('Удаление земли')
         dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
         widget = QWidget()
         layout = QVBoxLayout()
-        label = QLabel(f"Content")
-        button = QPushButton("Click me")
+        label = QLabel(f"Наполнение удаления земли")
+        button = QPushButton("ОК")
         layout.addWidget(label)
         layout.addWidget(button)
         widget.setLayout(layout)
         dock.setWidget(widget)
         return dock
-
-    def getConsoleWidget(self):
-        return self.consoleWidget
+    
+    def segmentation_dock_widget(self):
+        dock = QDockWidget('Сегментация')
+        dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+        widget = QWidget()
+        layout = QVBoxLayout()
+        label = QLabel(f"Наполнение сегментации")
+        button = QPushButton("ОК")
+        layout.addWidget(label)
+        layout.addWidget(button)
+        widget.setLayout(layout)
+        dock.setWidget(widget)
+        return dock
+    
+    def taxation_dock_widget(self):
+        dock = QDockWidget('Таксация')
+        dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+        widget = QWidget()
+        layout = QVBoxLayout()
+        label = QLabel(f"Наполнение таксации")
+        button = QPushButton("ОК")
+        layout.addWidget(label)
+        layout.addWidget(button)
+        widget.setLayout(layout)
+        dock.setWidget(widget)
+        return dock
+    
+    def modeling_dock_widget(self):
+        dock = QDockWidget('Моделирование')
+        dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+        widget = QWidget()
+        layout = QVBoxLayout()
+        label = QLabel(f"Наполнение моделирования")
+        button = QPushButton("ОК")
+        layout.addWidget(label)
+        layout.addWidget(button)
+        widget.setLayout(layout)
+        dock.setWidget(widget)
+        return dock
     
     

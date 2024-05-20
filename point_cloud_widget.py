@@ -25,7 +25,7 @@ class OpenGLWidget(QOpenGLWidget):
         self.num_points = 0
         self.color = (1.0, 1.0, 1.0)  # Белый цвет по умолчанию
         
-    def loadPointCloud(self, filename):
+    def load_point_cloud(self, filename):
         # Определение формата файла по расширению
         file_extension = os.path.splitext(filename)[1].lower()
 
@@ -84,11 +84,11 @@ class OpenGLWidget(QOpenGLWidget):
 
         glMatrixMode(GL_MODELVIEW)
         
-    def resetParameters(self):
+    def set_view_parameters(self, x, y, z ):
         self.scale_factor = 2
-        self.rotation_x = -90
-        self.rotation_y = 0
-        self.rotation_z = 0
+        self.rotation_x = x
+        self.rotation_y = y
+        self.rotation_z = z
         self.point_cloud_position = QPointF(0, 0)
         self.update()  # Обновляем виджет, чтобы отобразить изменения
 
@@ -99,7 +99,7 @@ class OpenGLWidget(QOpenGLWidget):
         self.vbo = vbo.VBO(np.array([], dtype=np.float32))
         self.color_vbo = vbo.VBO(np.array([], dtype=np.float32))
 
-    def updatePointCloud(self, point_cloud):
+    def update_point_cloud(self, point_cloud):
         # Получение данных точек из объекта PointCloud
         points = np.asarray(point_cloud.points)
         colors = np.asarray(point_cloud.colors)
@@ -162,7 +162,7 @@ class OpenGLWidget(QOpenGLWidget):
 
         # Отрисовка всех облаков точек
         for point_cloud in self.point_clouds.values():
-            self.updatePointCloud(point_cloud)
+            self.update_point_cloud(point_cloud)
 
             if self.vbo:
                 glEnableClientState(GL_VERTEX_ARRAY)
@@ -197,12 +197,12 @@ class OpenGLWidget(QOpenGLWidget):
 
         glPopMatrix()
 
-    def loadModel(self, filename):
+    def load_model(self, filename):
         model = pywavefront.Wavefront(filename, collect_faces=True)
         self.models[filename] = model
         self.update()
 
-    def setScaleFactor(self, scale):
+    def set_scale_factor(self, scale):
         self.scale_factor = scale
         self.update()
 
