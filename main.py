@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QMenu,
     QStatusBar,
     QToolTip,
+    QDockWidget,
     )
 
 class MenuBar:
@@ -93,16 +94,6 @@ class ToolBar:
         self.rightSideViewAction = QAction(QIcon("images/SideViewRight.png"), "Вид сбоку", self.parent)
         self.topViewAction = QAction(QIcon("images/TopView.png"), "Вид сверху", self.parent)
         self.bottomViewAction = QAction(QIcon("images/BottomView.png"), "Вид снизу", self.parent)
-        # self.saveAction = QAction(QIcon("images/view.png"))
-        # self.exitAction = QAction("Выйти", self.parent)
-        # # Действия в меню "Правка"
-        # self.colorAction = QAction("Цвет", self.parent)
-        # # Действия в подменю "Цвет"
-        # self.selectFromListAction = QAction("Выбрать из списка", self.parent)
-        # self.createNewColorAction = QAction("Создать новый цвет", self.parent)
-        # # Действия в меню "Помощь"
-        # self.helpContentAction = QAction("Справочный материал", self.parent)
-        # self.aboutAction = QAction("О приложении", self.parent)
 
         
 class ConsoleOutput:
@@ -132,6 +123,10 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self.consoleWidget = self.getConsoleWidget()  # Получаем consoleWidget
         self.redirect_console_output()
+        
+        # Инициализация атрибута для DockWidget "Удаление земли"
+        self.groundExtractionDock = None
+        
         # Создание меню
         self.menuCreator = MenuBar(self)
         self.menuCreator._createActions()
@@ -145,6 +140,9 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.frontViewButton.clicked.connect(self.set_front_view)
         self.menuCreator.openAction.triggered.connect(self.select_files)
         self.menuCreator.exitAction.triggered.connect(QApplication.instance().quit)
+        self.toolbarsCreator.earthExtractionAction.triggered.connect(self.toggle_dock_widget)
+        self.toolbarsCreator.frontViewAction.triggered.connect(self.set_front_view)
+        
         self.selected_files = []
         
 
@@ -180,10 +178,6 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
                 checkbox.stateChanged.connect(self.checkbox_changed)
 
-            # Добавление новых файлов в список файлов
-            # self.lineEdit.setText("; ".join(files))
-            # self.selected_files.extend(self.lineEdit.text().split("; "))
-
     def checkbox_changed(self, state):
         checkbox = self.sender()
         if checkbox:
@@ -199,6 +193,19 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
     def redirect_console_output(self):
         sys.stdout = ConsoleOutput(self.consoleWidget)
         sys.stderr = ConsoleOutput(self.consoleWidget)
+        
+    def toggle_dock_widget(self):
+        # Проверяем, существует ли DockWidget "Удаление земли"
+        if self.groundExtractionDock is None:
+            # Если DockWidget не существует, создаем его и добавляем
+            self.groundExtractionDock = self.GroundExtractionDockWidget()
+            self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.groundExtractionDock)
+        else:
+            # Если DockWidget существует, удаляем его
+            self.removeDockWidget(self.groundExtractionDock)
+            self.groundExtractionDock.setParent(None)
+            self.groundExtractionDock = None
+
 
 if __name__ == "__main__":
     app = QApplication([])

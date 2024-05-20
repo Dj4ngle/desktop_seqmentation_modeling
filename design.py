@@ -51,12 +51,12 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
         
         # Стыковочные виджеты
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.createFilesDockWidget())
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.createDockWidget('Свойства'))
-        self.consoleDock = self.createConsoleDockWidget()
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.FilesDockWidget())
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.DockWidget('Свойства'))
+        self.consoleDock = self.ConsoleDockWidget()
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.consoleDock)
         
-    def createDockWidget(self, title):
+    def DockWidget(self, title):
         dock = QDockWidget(title)
         dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
         widget = QWidget()
@@ -69,7 +69,7 @@ class Ui_MainWindow(object):
         dock.setWidget(widget)
         return dock
     
-    def createFilesDockWidget(self):
+    def FilesDockWidget(self):
         dock = QDockWidget('Файлы')
         dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
         widget = QWidget()
@@ -86,11 +86,24 @@ class Ui_MainWindow(object):
         dock.setWidget(widget)
         return dock
     
-    def createConsoleDockWidget(self):
+    def ConsoleDockWidget(self):
         dock = QDockWidget('Консоль')
         dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
         self.consoleWidget = ConsoleWidget()
         dock.setWidget(self.consoleWidget)
+        return dock
+    
+    def GroundExtractionDockWidget(self):
+        dock = QDockWidget('Удаление земли')
+        dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+        widget = QWidget()
+        layout = QVBoxLayout()
+        label = QLabel(f"Content")
+        button = QPushButton("Click me")
+        layout.addWidget(label)
+        layout.addWidget(button)
+        widget.setLayout(layout)
+        dock.setWidget(widget)
         return dock
 
     def getConsoleWidget(self):
