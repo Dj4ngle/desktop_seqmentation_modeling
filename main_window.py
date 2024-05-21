@@ -1,0 +1,202 @@
+import os
+import sys
+from datetime import datetime, timedelta
+
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtWidgets import QMainWindow, QFileDialog, QListWidgetItem, QCheckBox, QApplication
+
+from design import Ui_MainWindow
+from console_manager import ConsoleManager
+from menu_bar import MenuBar
+from tool_bar import ToolBar
+
+
+class MyMainWindow(QMainWindow, Ui_MainWindow):
+    def __init__(self):
+        super(MyMainWindow, self).__init__()
+
+        self.setWindowIcon(QIcon("images/Icon.png"))
+
+        self.setupUi(self)
+
+        # Создаем экземпляр для управления консолью
+        self.consoleManager = ConsoleManager(self)
+        # Создаем виджет док-панели для консоли
+        self.console_dock_widget = self.consoleManager.create_console_dock_widget()
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.console_dock_widget)
+        # Перенаправляем стандартный вывод в консоль
+        self.consoleManager.redirect_console_output()
+
+        self.groundExtractionDock = None
+
+        # Создаем меню
+        self.menuCreator = MenuBar(self)
+        self.menuCreator.create_actions()
+        self.menuCreator.create_menu_bar()
+
+        # Создаем панель инструментов
+        self.toolbarsCreator = ToolBar(self)
+        self.toolbarsCreator.create_actions()
+        self.toolbarsCreator._createToolBars()
+
+        # Подключаем обработчики событий для элементов меню и панели инструментов
+        self.menuCreator.openAction.triggered.connect(self.select_files)
+        self.menuCreator.saveAction.triggered.connect(self.save_selected_tree)
+        self.menuCreator.exitAction.triggered.connect(QApplication.instance().quit)
+        self.toolbarsCreator.earthExtractionAction.triggered.connect(lambda:
+                                                                     self.toggle_dock_widget('sampleDock',
+                                                                        self.ground_extraction_dock_widget,
+                                                                        Qt.DockWidgetArea.RightDockWidgetArea))
+        self.toolbarsCreator.segmentationAction.triggered.connect(lambda:
+                                                                     self.toggle_dock_widget('sampleDock',
+                                                                        self.segmentation_dock_widget,
+                                                                        Qt.DockWidgetArea.RightDockWidgetArea))
+        self.toolbarsCreator.taxationAction.triggered.connect(lambda:
+                                                                     self.toggle_dock_widget('sampleDock',
+                                                                        self.taxation_dock_widget,
+                                                                        Qt.DockWidgetArea.RightDockWidgetArea))
+        self.toolbarsCreator.modelingAction.triggered.connect(lambda:
+                                                                     self.toggle_dock_widget('sampleDock',
+                                                                        self.modeling_dock_widget,
+                                                                        Qt.DockWidgetArea.RightDockWidgetArea))
+
+        self.toolbarsCreator.frontViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(-90, 0, 0))
+        self.toolbarsCreator.backViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(-90, 0, 180))
+        self.toolbarsCreator.leftSideViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(-90, 0, 90))
+        self.toolbarsCreator.rightSideViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(-90, 0, 270))
+        self.toolbarsCreator.topViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(0, 0, 0))
+        self.toolbarsCreator.bottomViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(180, 0, 0))
+
+        # Подключаем кнопку и обработчик
+        self.select_all_button.clicked.connect(self.toggle_select_all)
+        # Подключаем обработчик события нажатия кнопки "Удалить"
+        self.remove_button.clicked.connect(self.remove_selected_items)
+
+        self.selected_files = []
+        self.dockWidgets = {}
+
+    def start_modeling(self):
+        # Метод для запуска моделирования
+        pass
+
+    def select_files(self):
+        # Метод для выбора файлов
+        files, _ = QFileDialog.getOpenFileNames(self, "Выбрать файлы", "", "LAS and PCD files (*.las *.pcd)")
+
+        if files:
+            for file in files:
+                # Создание нового элемента QListWidgetItem
+                item = QListWidgetItem(self.listWidget)
+
+                # Создание чекбокса с именем файла
+                checkbox = QCheckBox(file)
+                checkbox.setChecked(False)
+
+                checkbox.setProperty("filePath", file)
+                print(f"Загружен файл: {file}")
+
+                # Добавляем чекбокс в элемент QListWidgetItem
+                self.listWidget.setItemWidget(item, checkbox)
+                # Устанавливаем размер элемента списка для чекбокса
+                item.setSizeHint(checkbox.sizeHint())
+
+                checkbox.stateChanged.connect(self.checkbox_changed)
+                
+    def toggle_select_all(self):
+        # Метод для переключения всех чекбоксов
+        all_checked = all(self.listWidget.itemWidget(self.listWidget.item(index)).isChecked() 
+                          for index in range(self.listWidget.count()))
+
+        # Устанавливаем новое состояние для всех чекбоксов
+        new_state = Qt.CheckState.Unchecked if all_checked else Qt.CheckState.Checked
+        new_state_bool = new_state == Qt.CheckState.Checked
+
+        # Проходим по всем элементам в списке и устанавливаем новое состояние
+        for index in range(self.listWidget.count()):
+            item = self.listWidget.item(index)
+            checkbox = self.listWidget.itemWidget(item)
+            if checkbox:
+                checkbox.setChecked(new_state_bool)
+                
+    def remove_selected_items(self):
+        # Метод для удаления выбранных элементов
+        items = []
+        for index in range(self.listWidget.count()):
+            items.append(self.listWidget.item(index))
+        
+        # Проходим в обратном порядке по всем элементам и удаляем выбранные
+        for item in reversed(items):
+            checkbox = self.listWidget.itemWidget(item)
+            if checkbox and checkbox.isChecked():
+                file_path = checkbox.property("filePath")
+                
+                # Удаляем элемент из QListWidget
+                row = self.listWidget.row(item)
+                self.listWidget.takeItem(row)
+                
+                # Удаляем точку из OpenGLWidget, если файл загружен
+                if file_path and file_path in self.openGLWidget.point_clouds:
+                    del self.openGLWidget.point_clouds[file_path]
+                    print(f"Удалён файл: {file_path}")
+        
+        # Обновляем отображение в OpenGLWidget
+        self.openGLWidget.update()
+
+    def checkbox_changed(self, state):
+        # Метод для обработки изменения состояния чекбокса
+        checkbox = self.sender()
+        if checkbox:
+            # Извлекаем полный путь к файлу
+            file_path = checkbox.property("filePath")
+            if state == 2:
+                self.openGLWidget.load_point_cloud(file_path)
+            elif state == 0:
+                if file_path in self.openGLWidget.point_clouds:
+                    del self.openGLWidget.point_clouds[file_path]
+                    self.openGLWidget.update()
+                    
+
+    def toggle_dock_widget(self, widget_id, create_widget_func, dock_area):
+        if widget_id in self.dockWidgets:
+            dock_widget = self.dockWidgets.pop(widget_id)
+            self.removeDockWidget(dock_widget)
+            dock_widget.deleteLater()
+        else:
+            dock_widget = create_widget_func()
+            self.addDockWidget(dock_area, dock_widget)
+            self.dockWidgets[widget_id] = dock_widget
+
+    def save_selected_tree(self):
+        selected_files = []
+        for index in range(self.listWidget.count()):
+            item = self.listWidget.item(index)
+            checkbox = self.listWidget.itemWidget(item)
+            if checkbox.isChecked():
+                selected_files.append(checkbox.property("filePath"))
+
+        if not selected_files:
+            print("Нет выбранных файлов для сохранения")
+            return
+
+        if len(selected_files) == 1:
+            self.save_single_file(selected_files[0])
+        else:
+            self.save_multiple_files(selected_files)
+
+    def save_single_file(self, file_path):
+        save_path, _ = QFileDialog.getSaveFileName(self, "Сохранить выбранный файл", "", "LAS Files (*.las)")
+        if save_path:
+            las = pylas.read(file_path)
+            las.write(save_path)
+            print(f"Файл: {file_path} сохранён как: {save_path}")
+
+    def save_multiple_files(self, file_paths):
+        save_dir = QFileDialog.getExistingDirectory(self, "Выбрать папку для сохранения файлов")
+        if save_dir:
+            for file_path in file_paths:
+                las = pylas.read(file_path)
+                file_name = os.path.basename(file_path)
+                output_path = os.path.join(save_dir, file_name)
+                las.write(output_path)
+                print(f"Файл: {file_path} сохранён как: {output_path}")
