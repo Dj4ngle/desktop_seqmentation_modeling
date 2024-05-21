@@ -1,5 +1,10 @@
+import json
+import os
 import sys
 from datetime import datetime, timedelta
+
+import numpy as np
+import pylas
 from PyQt6.QtCore import Qt
 from PyQt6 import QtCore
 from PyQt6.QtGui import QAction, QIcon
@@ -180,6 +185,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         
         
         self.menuCreator.openAction.triggered.connect(self.select_files)
+        self.menuCreator.saveAction.triggered.connect(self.save_selected_tree)
         self.menuCreator.exitAction.triggered.connect(QApplication.instance().quit)
         self.toolbarsCreator.earthExtractionAction.triggered.connect(lambda:
                                                                      self.toggle_dock_widget('sampleDock',
@@ -260,6 +266,39 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             self.addDockWidget(dock_area, dock_widget)
             self.dockWidgets[widget_id] = dock_widget
 
+    def save_selected_tree(self):
+        selected_files = []
+        for index in range(self.listWidget.count()):
+            item = self.listWidget.item(index)
+            checkbox = self.listWidget.itemWidget(item)
+            if checkbox.isChecked():
+                selected_files.append(checkbox.property("filePath"))
+
+        if not selected_files:
+            print("Нет выбранных файлов для сохранения")
+            return
+
+        if len(selected_files) == 1:
+            self.save_single_file(selected_files[0])
+        else:
+            self.save_multiple_files(selected_files)
+
+    def save_single_file(self, file_path):
+        save_path, _ = QFileDialog.getSaveFileName(self, "Сохранить выбранный файл", "", "LAS Files (*.las)")
+        if save_path:
+            las = pylas.read(file_path)
+            las.write(save_path)
+            print(f"Файл: {file_path} сохранён как: {save_path}")
+
+    def save_multiple_files(self, file_paths):
+        save_dir = QFileDialog.getExistingDirectory(self, "Выбрать папку для сохранения файлов")
+        if save_dir:
+            for file_path in file_paths:
+                las = pylas.read(file_path)
+                file_name = os.path.basename(file_path)
+                output_path = os.path.join(save_dir, file_name)
+                las.write(output_path)
+                print(f"Файл: {file_path} сохранён как: {output_path}")
 
 if __name__ == "__main__":
     app = QApplication([])
