@@ -211,6 +211,9 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.toolbarsCreator.topViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(0, 0, 0))
         self.toolbarsCreator.bottomViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(180, 0, 0))
         
+        # Подключаем кнопку и обработчик
+        self.select_all_button.clicked.connect(self.toggle_select_all)
+        
         self.selected_files = []
         self.dockWidgets = {}
 
@@ -242,6 +245,22 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 item.setSizeHint(checkbox.sizeHint())
 
                 checkbox.stateChanged.connect(self.checkbox_changed)
+                
+    def toggle_select_all(self):
+        # Проверяем, все ли чекбоксы выбраны
+        all_checked = all(self.listWidget.itemWidget(self.listWidget.item(index)).isChecked() 
+                          for index in range(self.listWidget.count()))
+
+        # Устанавливаем новое состояние для всех чекбоксов
+        new_state = Qt.CheckState.Unchecked if all_checked else Qt.CheckState.Checked
+        new_state_bool = new_state == Qt.CheckState.Checked
+
+        # Пройдемся по всем элементам в списке и установим новое состояние
+        for index in range(self.listWidget.count()):
+            item = self.listWidget.item(index)
+            checkbox = self.listWidget.itemWidget(item)
+            if checkbox:
+                checkbox.setChecked(new_state_bool)
 
     def checkbox_changed(self, state):
         checkbox = self.sender()

@@ -52,10 +52,10 @@ class Ui_MainWindow(object):
 
         # Добавляем QListWidget и QPushButton в стыковочный виджет
         self.listWidget = QListWidget()
-        self.frontViewButton = QPushButton("Сбросить параметры")
+        self.select_all_button = QPushButton("Выбрать всё")
         
         layout.addWidget(self.listWidget)
-        layout.addWidget(self.frontViewButton)
+        layout.addWidget(self.select_all_button)
 
         widget.setLayout(layout)
         dock.setWidget(widget)
