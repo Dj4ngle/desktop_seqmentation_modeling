@@ -213,6 +213,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         
         # Подключаем кнопку и обработчик
         self.select_all_button.clicked.connect(self.toggle_select_all)
+        # Подключаем обработчик события нажатия кнопки "Удалить"
+        self.remove_button.clicked.connect(self.remove_selected_items)
         
         self.selected_files = []
         self.dockWidgets = {}
@@ -261,6 +263,30 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             checkbox = self.listWidget.itemWidget(item)
             if checkbox:
                 checkbox.setChecked(new_state_bool)
+                
+    def remove_selected_items(self):
+        # Получаем список всех элементов в QListWidget
+        items = []
+        for index in range(self.listWidget.count()):
+            items.append(self.listWidget.item(index))
+        
+        # Проходим в обратном порядке по всем элементам и удаляем выбранные
+        for item in reversed(items):
+            checkbox = self.listWidget.itemWidget(item)
+            if checkbox and checkbox.isChecked():
+                file_path = checkbox.property("filePath")
+                
+                # Удаляем элемент из QListWidget
+                row = self.listWidget.row(item)
+                self.listWidget.takeItem(row)
+                
+                # Удаляем точку из OpenGLWidget, если файл загружен
+                if file_path and file_path in self.openGLWidget.point_clouds:
+                    del self.openGLWidget.point_clouds[file_path]
+                    print(f"Удалён файл: {file_path}")
+        
+        # Обновляем отображение в OpenGLWidget
+        self.openGLWidget.update()
 
     def checkbox_changed(self, state):
         checkbox = self.sender()

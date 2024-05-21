@@ -1,6 +1,6 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QDockWidget, QTextEdit,
-                             QVBoxLayout, QWidget, QPushButton, QLabel, QToolBar, QMenu, QStatusBar, QListWidget, QPlainTextEdit )
+                             QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QToolBar, QMenu, QStatusBar, QListWidget, QPlainTextEdit )
 from point_cloud_widget import OpenGLWidget
 from PyQt6.QtCore import Qt
 from datetime import datetime, timedelta
@@ -48,14 +48,25 @@ class Ui_MainWindow(object):
         dock = QDockWidget('Файлы')
         dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
         widget = QWidget()
-        layout = QVBoxLayout()
+        layout = QVBoxLayout()  # Используем вертикальную компоновку
 
-        # Добавляем QListWidget и QPushButton в стыковочный виджет
+        # Добавляем QListWidget
         self.listWidget = QListWidget()
-        self.select_all_button = QPushButton("Выбрать всё")
-        
         layout.addWidget(self.listWidget)
-        layout.addWidget(self.select_all_button)
+
+        # Создаем горизонтальную компоновку для кнопок
+        buttons_layout = QHBoxLayout()
+
+        # Добавляем кнопку "Выбрать всё"
+        self.select_all_button = QPushButton("Выбрать всё")
+        buttons_layout.addWidget(self.select_all_button)
+
+        # Добавляем кнопку "Удалить"
+        self.remove_button = QPushButton("Удалить")
+        buttons_layout.addWidget(self.remove_button)
+
+        # Добавляем горизонтальную компоновку кнопок в вертикальную компоновку
+        layout.addLayout(buttons_layout)
 
         widget.setLayout(layout)
         dock.setWidget(widget)
