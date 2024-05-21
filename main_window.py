@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon, QAction
-from PyQt6.QtWidgets import QMainWindow, QFileDialog, QListWidgetItem, QCheckBox, QApplication
+from PyQt6.QtWidgets import QMainWindow, QFileDialog, QListWidgetItem, QCheckBox, QApplication, QLabel
 
 from design import Ui_MainWindow
 from console_manager import ConsoleManager
@@ -75,6 +75,10 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
         self.selected_files = []
         self.dockWidgets = {}
+        
+        # Инициализация атрибута для DockWidget "Свойства"
+        self.properties_dock = None
+        self.properties_widget = None
 
     def start_modeling(self):
         # Метод для запуска моделирования
@@ -144,18 +148,37 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.openGLWidget.update()
 
     def checkbox_changed(self, state):
-        # Метод для обработки изменения состояния чекбокса
         checkbox = self.sender()
         if checkbox:
-            # Извлекаем полный путь к файлу
             file_path = checkbox.property("filePath")
-            if state == 2:
+            if state == 2:  # Checkbox is checked
                 self.openGLWidget.load_point_cloud(file_path)
-            elif state == 0:
+                self.update_properties_dock(file_path)
+            elif state == 0:  # Checkbox is unchecked
                 if file_path in self.openGLWidget.point_clouds:
                     del self.openGLWidget.point_clouds[file_path]
                     self.openGLWidget.update()
-                    
+                    self.clear_properties_dock()
+
+    def update_properties_dock(self, file_path):
+        if file_path in self.openGLWidget.point_clouds:
+            point_cloud = self.openGLWidget.point_clouds[file_path]
+            num_points = len(point_cloud.points)
+
+            self.clear_properties_dock()
+
+            file_label = QLabel(f"Файл: {file_path}")
+            num_points_label = QLabel(f"Количество точек: {num_points}")
+
+            self.properties_layout.addWidget(file_label)
+            self.properties_layout.addWidget(num_points_label)
+
+    def clear_properties_dock(self):
+        if self.properties_layout:
+            for i in reversed(range(self.properties_layout.count())):
+                widget = self.properties_layout.itemAt(i).widget()
+                if widget:
+                    widget.setParent(None)
 
     def toggle_dock_widget(self, widget_id, create_widget_func, dock_area):
         if widget_id in self.dockWidgets:

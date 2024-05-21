@@ -29,17 +29,14 @@ class Ui_MainWindow(object):
         
         # Стыковочные виджеты
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.files_dock_widget())
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.dock_widget('Свойства'))
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.properties_dock_widget())
         
-    def dock_widget(self, title):
-        dock = QDockWidget(title)
-        dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+    def properties_dock_widget(self):
+        dock = QDockWidget('Свойства')
+        dock.setAllowedAreas(QtCore.Qt.DockWidgetArea.AllDockWidgetAreas)
         widget = QWidget()
         layout = QVBoxLayout()
-        label = QLabel(f"Content of {title}")
-        button = QPushButton("Click me")
-        layout.addWidget(label)
-        layout.addWidget(button)
+        self.properties_layout = layout  # Сохраняем ссылку на layout для обновления
         widget.setLayout(layout)
         dock.setWidget(widget)
         return dock
