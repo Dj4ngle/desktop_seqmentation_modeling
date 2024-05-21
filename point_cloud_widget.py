@@ -60,10 +60,21 @@ class OpenGLWidget(QOpenGLWidget):
         # Сохранение облака точек в словарь
         self.point_clouds[filename] = pcd
         
-        # Вычисление и установка масштабного коэффициента
-        self.scale_factor = self.calculate_scale_factor(points_centered)
+        # Вычисление и установка масштабного коэффициента для всех загруженных облаков точек
+        self.scale_factor = self.calculate_scale_factor_for_all()
     
         self.update()
+        
+    def calculate_scale_factor_for_all(self):
+        max_size = 0
+
+        for pcd in self.point_clouds.values():
+            points = np.asarray(pcd.points)
+            size = np.max(points, axis=0) - np.min(points, axis=0)
+            max_size = max(max_size, np.max(size))
+
+        scale_factor = 1.5 / max_size if max_size != 0 else 1
+        return scale_factor
         
     def resizeGL(self, width, height):
         # Определяем размеры окна
@@ -85,7 +96,7 @@ class OpenGLWidget(QOpenGLWidget):
         glMatrixMode(GL_MODELVIEW)
         
     def set_view_parameters(self, x, y, z ):
-        self.scale_factor = 2
+        self.scale_factor = self.calculate_scale_factor_for_all()
         self.rotation_x = x
         self.rotation_y = y
         self.rotation_z = z
@@ -134,21 +145,6 @@ class OpenGLWidget(QOpenGLWidget):
         center_y = sum_y / num_vertices
         center_z = sum_z / num_vertices
         return center_x, center_y, center_z
-    
-    def calculate_scale_factor(self, points):
-        # Находим максимальные и минимальные значения координат точек
-        min_coords = np.min(points, axis=0)
-        max_coords = np.max(points, axis=0)
-        
-        # Вычисляем размеры по каждой оси
-        size = max_coords - min_coords
-        
-        # Находим максимальный размер
-        max_size = np.max(size)
-        
-        # Вычисляем масштабный коэффициент
-        scale_factor = 1.5 / max_size
-        return scale_factor
 
     def paintGL(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
