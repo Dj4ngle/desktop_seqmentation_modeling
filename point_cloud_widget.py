@@ -261,7 +261,7 @@ class OpenGLWidget(QOpenGLWidget):
         # Предотвращение слишком маленького или слишком большого масштаба
         if self.scale_factor < 0.005:
             self.scale_factor = 0.005
-        elif self.scale_factor > 10:
-            self.scale_factor = 10
+        elif self.scale_factor > 100:
+            self.scale_factor = 100
 
         self.update()

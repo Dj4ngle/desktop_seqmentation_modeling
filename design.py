@@ -69,23 +69,6 @@ class Ui_MainWindow(object):
         dock.setWidget(widget)
         return dock
     
-    # def ground_extraction_dock_widget(self):
-    #     dock = QDockWidget('Удаление земли')
-    #     dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
-    #     widget = QWidget()
-    #     layout = QVBoxLayout()
-    #     self.file_list_widget = QListWidget()  # Список для выбора файлов
-    #     layout.addWidget(self.file_list_widget)
-
-    #     # Кнопка "ОК" для запуска удаления земли
-    #     self.ground_extraction = QPushButton("ОК")
-    #     layout.addWidget(self.ground_extraction)
-    #     self.ground_extraction.clicked.connect(self.openGLWidget.remove_ground)
-        
-    #     widget.setLayout(layout)
-    #     dock.setWidget(widget)
-    #     return dock
-    
     def ground_extraction_dock_widget(self):
         dock = QDockWidget('Удаление земли')
         dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
