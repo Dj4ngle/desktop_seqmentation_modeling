@@ -13,7 +13,7 @@ class OpenGLWidget(QOpenGLWidget):
         super(OpenGLWidget, self).__init__(parent)
         self.point_clouds = {}
         self.models = {}
-        self.scale_factor = 0
+        self.scale_factor = 2
         self.last_mouse_position = None
         self.rotation_x = 1
         self.rotation_y = 1
@@ -65,6 +65,34 @@ class OpenGLWidget(QOpenGLWidget):
         self.scale_factor = self.calculate_scale_factor_for_all()
     
         self.update()
+    
+    # def load_point_cloud(self, filename):
+    #     if filename in self.point_clouds:
+    #         print(f"Использование кэшированного облака точек для: {filename}")
+    #         return  # Если файл уже загружен, пропускаем загрузку
+        
+    #     # Определение формата файла по расширению
+    #     file_extension = os.path.splitext(filename)[1].lower()
+
+    #     if file_extension == '.las':
+    #         las = laspy.read(filename)
+    #         points = np.vstack((las.x, las.y, las.z)).transpose()
+    #         colors = np.vstack((las.red, las.green, las.blue)).transpose() / 255.0
+    #     elif file_extension == '.pcd':
+    #         pcd = o3d.io.read_point_cloud(filename)
+    #         points = np.asarray(pcd.points)
+    #         colors = np.ones_like(points)  # Белый цвет по умолчанию
+    #     else:
+    #         print("Unsupported file format")
+    #         return
+
+    #     pcd = o3d.geometry.PointCloud()
+    #     pcd.points = o3d.utility.Vector3dVector(points)
+    #     pcd.colors = o3d.utility.Vector3dVector(colors)
+
+    #     self.point_clouds[filename] = pcd  # Сохранение в кэш
+    #     self.scale_factor = self.calculate_scale_factor_for_all()
+    #     self.update()
         
     def calculate_scale_factor_for_all(self):
         max_size = 0

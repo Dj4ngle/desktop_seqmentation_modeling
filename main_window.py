@@ -84,16 +84,66 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.properties_dock = None
         self.properties_widget = None
         
+    # def perform_ground_extraction(self, file_path):
+    #     if file_path in self.openGLWidget.point_clouds:
+    #         original_pcd = self.openGLWidget.point_clouds[file_path]
+
+    #         # Пример простой сегментации земли
+    #         plane_model, inliers = original_pcd.segment_plane(distance_threshold=0.6,
+    #                                                         ransac_n=4,
+    #                                                         num_iterations=1000)
+    #         ground = original_pcd.select_by_index(inliers)
+    #         objects = original_pcd.select_by_index(inliers, invert=True)
+
+    #         # Изменяем расширение файла и добавляем _ground и _objects
+    #         file_extension = os.path.splitext(file_path)[1]
+    #         ground_file_path = file_path.replace(file_extension, "_ground" + file_extension)
+    #         objects_file_path = file_path.replace(file_extension, "_objects" + file_extension)
+
+    #         # Добавляем результаты в виджет для визуализации
+    #         self.openGLWidget.point_clouds[ground_file_path] = ground
+    #         self.openGLWidget.point_clouds[objects_file_path] = objects
+    #         self.openGLWidget.update()
+
     def perform_ground_extraction(self, file_path):
         if file_path in self.openGLWidget.point_clouds:
             original_pcd = self.openGLWidget.point_clouds[file_path]
+            points = np.asarray(original_pcd.points)
+            
+            # 0.3, 30, 0.1, 5
+            # Оценка нормалей
+            original_pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.3, max_nn=30))
+            normals = np.asarray(original_pcd.normals)
+            normal_threshold=0.1
+            height_offset=5
 
-            # Пример простой сегментации земли
-            plane_model, inliers = original_pcd.segment_plane(distance_threshold=0.2,
-                                                            ransac_n=3,
-                                                            num_iterations=1000)
-            ground = original_pcd.select_by_index(inliers)
-            objects = original_pcd.select_by_index(inliers, invert=True)
+            # Фильтрация нормалей и высоты
+            idx_normals = np.where((abs(normals[:, 1]) < normal_threshold))
+            idx_ground = np.where(points[:, 1] > np.min(points[:, 1]) + height_offset)
+            idx_wronglyfiltered = np.setdiff1d(idx_ground[0], idx_normals[0])
+            idx_retained = np.append(idx_normals[0], idx_wronglyfiltered)
+
+            # Оставшиеся точки
+            points_retained = points[idx_retained]
+
+            # Точки земли
+            idx_all = np.arange(points.shape[0])
+            idx_inv = np.setdiff1d(idx_all, idx_retained)
+            points_ground = points[idx_inv]
+
+            # Создание облаков точек
+            ground = o3d.geometry.PointCloud()
+            ground.points = o3d.utility.Vector3dVector(points_ground)
+
+            objects = o3d.geometry.PointCloud()
+            objects.points = o3d.utility.Vector3dVector(points_retained)
+
+            # Окрашивание точек земли
+            colors_ground = np.zeros(points_ground.shape)
+            colors_ground[:, 0] = 1
+            colors_ground[:, 1] = 0.2
+            colors_ground[:, 2] = 0.2
+            ground.colors = o3d.utility.Vector3dVector(colors_ground)
 
             # Изменяем расширение файла и добавляем _ground и _objects
             file_extension = os.path.splitext(file_path)[1]
@@ -104,7 +154,6 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             self.openGLWidget.point_clouds[ground_file_path] = ground
             self.openGLWidget.point_clouds[objects_file_path] = objects
             self.openGLWidget.update()
-
     
     def start_modeling(self):
         # Метод для запуска моделирования
@@ -191,7 +240,22 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                     del self.openGLWidget.point_clouds[file_path]
                     self.openGLWidget.update()
                     self.clear_properties_dock()
+    
+    # def checkbox_changed(self, state):
+    #     checkbox = self.sender()
+    #     if checkbox:
+    #         file_path = checkbox.property("filePath")
+    #         if state == 2:  # Checkbox is checked
+    #             self.openGLWidget.load_point_cloud(file_path)  # Загрузка или использование кэша
+    #             self.update_properties_dock(file_path)
+    #         elif state == 0:  # Checkbox is unchecked
+    #             # Здесь не нужно удалять данные, просто скрываем их визуализацию
+    #             self.hide_point_cloud(file_path)
 
+    # def hide_point_cloud(self, file_path):
+    #     if file_path in self.openGLWidget.point_clouds:
+    #         del self.openGLWidget.point_clouds[file_path]  # Можно также просто скрыть без удаления
+    #         self.update()
 
     def update_properties_dock(self, file_path):
         if file_path in self.openGLWidget.point_clouds:
