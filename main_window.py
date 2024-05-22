@@ -166,9 +166,6 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             for file in files:
                 # Создание нового элемента QListWidgetItem
                 item = QListWidgetItem(self.listWidget)
-                
-                # Получение имени файла и текущей директории
-                file_name = os.path.basename(file)
 
                 # Создание чекбокса с именем файла
                 checkbox = QCheckBox(file)
@@ -231,14 +228,14 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             if state == 2:  # Checkbox is checked
                 if os.path.exists(file_path):
                     self.openGLWidget.load_point_cloud(file_path)
-                    self.update_properties_dock(file_path)
+                    #self.update_properties_dock(file_path)
                 else:
                     print(f"Файл {file_path} не найден")
             elif state == 0:  # Checkbox is unchecked
                 if file_path in self.openGLWidget.point_clouds:
                     del self.openGLWidget.point_clouds[file_path]
                     self.openGLWidget.update()
-                    self.clear_properties_dock()
+                    #self.clear_properties_dock()
     
     # def checkbox_changed(self, state):
     #     checkbox = self.sender()
@@ -277,9 +274,15 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
     def toggle_dock_widget(self, dock_widget_name, dock_area):
         dock_widget = self.dock_widgets.get(dock_widget_name)
-        for widget in self.dock_widgets.values():
-            widget.hide()
-        if not dock_widget.isVisible():
+        # Сначала проверяем, открыт ли данный виджет
+        if dock_widget.isVisible():
+            # Если виджет уже открыт и видим, просто его скрываем
+            dock_widget.hide()
+        else:
+            # Если виджет закрыт, скрываем все остальные виджеты
+            for widget in self.dock_widgets.values():
+                widget.hide()
+            # И отображаем нужный виджет
             self.addDockWidget(dock_area, dock_widget)
             dock_widget.show()
 

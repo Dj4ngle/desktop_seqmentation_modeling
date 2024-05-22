@@ -25,20 +25,27 @@ class OpenGLWidget(QOpenGLWidget):
         self.num_points = 0
         self.color = (1.0, 1.0, 1.0)  # Белый цвет по умолчанию
 
+        self.point_clouds = {}
+        self.vbo_data = {}
+
 
     def load_point_cloud(self, filename):
-        # Определение формата файла по расширению
-        file_extension = os.path.splitext(filename)[1].lower()
+        if filename not in self.point_clouds:
+            # Инициализация записи, если она еще не существует
+            self.point_clouds[filename] = {'active': False, 'data': None}
 
+        if filename in self.vbo_data:
+            # Если данные уже загружены в VBO, просто активируем их для отображения
+            self.point_clouds[filename]['active'] = True
+            self.update()
+            return
+        # Загрузка и кэширование данных
+        file_extension = os.path.splitext(filename)[1].lower()
         if file_extension == '.las':
-            # Загрузка LAS файла
             las = laspy.read(filename)
             points = np.vstack((las.x, las.y, las.z)).transpose()
-            # Чтение RGB цвета
-            colors = np.vstack((las.red, las.green, las.blue)).transpose() / 255.0  # Нормализуем цвета к диапазону [0, 1]
-
+            colors = np.vstack((las.red, las.green, las.blue)).transpose() / 255.0
         elif file_extension == '.pcd':
-            # Загрузка PCD файла
             pcd = o3d.io.read_point_cloud(filename)
             points = np.asarray(pcd.points)
             colors = np.ones_like(points)  # Белый цвет по умолчанию
@@ -46,24 +53,12 @@ class OpenGLWidget(QOpenGLWidget):
             print("Unsupported file format")
             return
 
-        # Убираем отрицательные значения цветов
-        # colors = np.abs(colors)
-    
-        # Центрирование точек
-        pcd_center = np.mean(points, axis=0)
-        points_centered = points - pcd_center
-
-        # Создание объекта PointCloud в Open3D
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points_centered)
-        pcd.colors = o3d.utility.Vector3dVector(colors)
-
-        # Сохранение облака точек в словарь
-        self.point_clouds[filename] = pcd
-        
-        # Вычисление и установка масштабного коэффициента для всех загруженных облаков точек
-        self.scale_factor = self.calculate_scale_factor_for_all()
-    
+        points_centered = points - np.mean(points, axis=0)
+        # Создание и сохранение VBO
+        point_vbo = vbo.VBO(np.array(points_centered, dtype=np.float32))
+        color_vbo = vbo.VBO(np.array(colors, dtype=np.float32))
+        self.vbo_data[filename] = (point_vbo, color_vbo, len(points_centered))
+        self.point_clouds[filename] = {'active': True, 'data': points_centered}
         self.update()
     
     # def load_point_cloud(self, filename):
@@ -186,26 +181,23 @@ class OpenGLWidget(QOpenGLWidget):
         glRotatef(self.rotation_z, 0, 0, 1)
 
         # Отрисовка всех облаков точек
-        for point_cloud in self.point_clouds.values():
-            self.update_point_cloud(point_cloud)
-
-            if self.vbo:
+        for filename, cloud_info in self.point_clouds.items():
+            if cloud_info['active']:  # Проверяем, активно ли облако
+                point_vbo, color_vbo, num_points = self.vbo_data[filename]
+                point_vbo.bind()
+                glVertexPointer(3, GL_FLOAT, 0, None)
                 glEnableClientState(GL_VERTEX_ARRAY)
+
+                color_vbo.bind()
+                glColorPointer(3, GL_FLOAT, 0, None)
                 glEnableClientState(GL_COLOR_ARRAY)
-                
-                self.vbo.bind()
-                glVertexPointer(3, GL_FLOAT, 0, self.vbo)
-                
-                self.vbo.unbind()
-                self.color_vbo.bind()
-                
-                glColorPointer(3, GL_FLOAT, 0, self.color_vbo)
-                
-                glDrawArrays(GL_POINTS, 0, self.num_points)
-                
-                glDisableClientState(GL_COLOR_ARRAY)
+
+                glDrawArrays(GL_POINTS, 0, num_points)
+
                 glDisableClientState(GL_VERTEX_ARRAY)
-                self.color_vbo.unbind()
+                glDisableClientState(GL_COLOR_ARRAY)
+                point_vbo.unbind()
+                color_vbo.unbind()
 
         # Отрисовка всех моделей
         for model in self.models.values():
@@ -221,6 +213,7 @@ class OpenGLWidget(QOpenGLWidget):
                 glEnd()
 
         glPopMatrix()
+        self.update()
 
     def load_model(self, filename):
         model = pywavefront.Wavefront(filename, collect_faces=True)

@@ -34,7 +34,6 @@ class Ui_MainWindow(object):
 
     def init_dock_widgets(self):
         self.dock_widgets = {
-            'files': self.files_dock_widget(),
             'ground_extraction': self.ground_extraction_dock_widget(),
             'segmentation': self.segmentation_dock_widget(),
             'taxation': self.taxation_dock_widget(),
