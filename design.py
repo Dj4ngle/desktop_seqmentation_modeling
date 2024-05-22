@@ -69,18 +69,55 @@ class Ui_MainWindow(object):
         dock.setWidget(widget)
         return dock
     
+    # def ground_extraction_dock_widget(self):
+    #     dock = QDockWidget('Удаление земли')
+    #     dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+    #     widget = QWidget()
+    #     layout = QVBoxLayout()
+    #     self.file_list_widget = QListWidget()  # Список для выбора файлов
+    #     layout.addWidget(self.file_list_widget)
+
+    #     # Кнопка "ОК" для запуска удаления земли
+    #     self.ground_extraction = QPushButton("ОК")
+    #     layout.addWidget(self.ground_extraction)
+    #     self.ground_extraction.clicked.connect(self.openGLWidget.remove_ground)
+        
+    #     widget.setLayout(layout)
+    #     dock.setWidget(widget)
+    #     return dock
+    
     def ground_extraction_dock_widget(self):
         dock = QDockWidget('Удаление земли')
         dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
         widget = QWidget()
         layout = QVBoxLayout()
-        label = QLabel(f"Наполнение удаления земли")
-        button = QPushButton("ОК")
-        layout.addWidget(label)
-        layout.addWidget(button)
+
+        self.clouds_list_widget = QListWidget()
+        layout.addWidget(self.clouds_list_widget)
+
+        update_button = QPushButton("Обновить список")
+        update_button.clicked.connect(self.update_clouds_list)
+        layout.addWidget(update_button)
+
+        run_button = QPushButton("Удалить землю")
+        run_button.clicked.connect(self.run_ground_extraction)
+        layout.addWidget(run_button)
+
         widget.setLayout(layout)
         dock.setWidget(widget)
         return dock
+
+    def update_clouds_list(self):
+        self.clouds_list_widget.clear()
+        for file_name in self.openGLWidget.point_clouds:
+            self.clouds_list_widget.addItem(file_name)
+
+    def run_ground_extraction(self):
+        selected_items = self.clouds_list_widget.selectedItems()
+        if selected_items:
+            file_path = selected_items[0].text()
+            self.perform_ground_extraction(file_path)
+ 
     
     def segmentation_dock_widget(self):
         dock = QDockWidget('Сегментация')

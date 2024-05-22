@@ -1,15 +1,16 @@
 import os
 import sys
 from datetime import datetime, timedelta
-
+import open3d as o3d
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon, QAction
 from PyQt6.QtWidgets import QMainWindow, QFileDialog, QListWidgetItem, QCheckBox, QApplication, QLabel
-
+import numpy as np
 from design import Ui_MainWindow
 from console_manager import ConsoleManager
 from menu_bar import MenuBar
 from tool_bar import ToolBar
+from sklearn.cluster import DBSCAN
 
 
 class MyMainWindow(QMainWindow, Ui_MainWindow):
@@ -61,12 +62,12 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                                                                         self.modeling_dock_widget,
                                                                         Qt.DockWidgetArea.RightDockWidgetArea))
 
-        self.toolbarsCreator.frontViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(-90, 0, 0))
-        self.toolbarsCreator.backViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(-90, 0, 180))
-        self.toolbarsCreator.leftSideViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(-90, 0, 90))
-        self.toolbarsCreator.rightSideViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(-90, 0, 270))
-        self.toolbarsCreator.topViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(0, 0, 0))
-        self.toolbarsCreator.bottomViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(180, 0, 0))
+        self.toolbarsCreator.frontViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(0, 0, 0))
+        self.toolbarsCreator.backViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(0, 180, 0))
+        self.toolbarsCreator.leftSideViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(0, 90, 0))
+        self.toolbarsCreator.rightSideViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(0, 270, 0))
+        self.toolbarsCreator.topViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(90, 0, 0))
+        self.toolbarsCreator.bottomViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(270, 0, 0))
 
         # Подключаем кнопку и обработчик
         self.select_all_button.clicked.connect(self.toggle_select_all)
@@ -79,6 +80,115 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         # Инициализация атрибута для DockWidget "Свойства"
         self.properties_dock = None
         self.properties_widget = None
+        
+    def perform_ground_extraction(self, file_path):
+        if file_path in self.openGLWidget.point_clouds:
+            original_pcd = self.openGLWidget.point_clouds[file_path]
+            
+            # Создаем матрицу поворота для поворота на -90 градусов вокруг оси X
+            R = original_pcd.get_rotation_matrix_from_xyz((0, 0, 0))
+            
+            # Поворачиваем облако точек
+            rotated_pcd = original_pcd.rotate(R, center=(0, 0, 0))
+
+            # Пример простой сегментации земли
+            plane_model, inliers = original_pcd.segment_plane(distance_threshold=0.01,
+                                                            ransac_n=3,
+                                                            num_iterations=100)
+            ground = original_pcd.select_by_index(inliers)
+            objects = original_pcd.select_by_index(inliers, invert=True)
+
+            # Добавление результатов в виджет для визуализации
+            self.openGLWidget.point_clouds[file_path + "_ground"] = ground
+            # self.openGLWidget.point_clouds[file_path + "_objects"] = objects
+            self.openGLWidget.update()
+    
+    # def perform_ground_extraction(self, filename):
+    #     if filename not in self.openGLWidget.point_clouds:
+    #         print(f"Point cloud {filename} not found.")
+    #         return
+
+    #     pcd = self.openGLWidget.point_clouds[filename]
+    #     points = np.asarray(pcd.points)
+    #     colors = np.asarray(pcd.colors)
+
+    #     # Используем DBSCAN для кластеризации точек по высоте
+    #     clustering = DBSCAN(eps=0.78, min_samples=50).fit(points)
+    #     labels = clustering.labels_
+
+    #     # Предполагаем, что точки с минимальной средней высотой принадлежат земле
+    #     unique_labels = np.unique(labels)
+    #     ground_label = None
+    #     min_z = float('inf')
+
+    #     for label in unique_labels:
+    #         label_points = points[labels == label]
+    #         avg_z = np.mean(label_points[:, 2])
+    #         if avg_z < min_z:
+    #             min_z = avg_z
+    #             ground_label = label
+
+    #     # Разделяем точки на землю и не землю
+    #     ground_points = points[labels == ground_label]
+    #     ground_colors = colors[labels == ground_label]
+    #     tree_points = points[labels != ground_label]
+    #     tree_colors = colors[labels != ground_label]
+
+    #     # Создаём новые облака точек
+    #     ground_pcd = o3d.geometry.PointCloud()
+    #     ground_pcd.points = o3d.utility.Vector3dVector(ground_points)
+    #     ground_pcd.colors = o3d.utility.Vector3dVector(ground_colors)
+
+    #     tree_pcd = o3d.geometry.PointCloud()
+    #     tree_pcd.points = o3d.utility.Vector3dVector(tree_points)
+    #     tree_pcd.colors = o3d.utility.Vector3dVector(tree_colors)
+
+    #     # Добавляем новые облака точек в словарь
+    #     self.openGLWidget.point_clouds[filename + "_ground"] = ground_pcd
+    #     # self.openGLWidget.point_clouds[filename + "_trees"] = tree_pcd
+
+    #     self.openGLWidget.update()
+        
+    
+    # def perform_ground_extraction(self, file_path):
+    #     if file_path in self.openGLWidget.point_clouds:
+    #         original_pcd = self.openGLWidget.point_clouds[file_path]
+            
+    #         # Создаем матрицу поворота для поворота на -90 градусов вокруг оси X
+    #         R = original_pcd.get_rotation_matrix_from_xyz((-np.pi / 2, 0, 0))
+            
+    #         # Поворачиваем облако точек
+    #         rotated_pcd = original_pcd.rotate(R, center=(0, 0, 0))
+            
+    #         points = np.asarray(original_pcd.points)
+    #         normals = np.asarray(original_pcd.normals)
+            
+    #         idx_all = np.arange(points.shape[0]).reshape(-1, 1)
+
+    #         idx_normals = np.where(np.abs(normals[:, 2]) < 0.05)[0]
+    #         idx_ground = np.where(points[:, 2] > np.min(points[:, 2]) + 5)[0]
+    #         idx_wronglyfiltered = np.setdiff1d(idx_ground, idx_normals)
+    #         idx_retained = np.append(idx_normals, idx_wronglyfiltered)
+
+    #         if idx_retained.any() != points.shape[0]:
+    #             points = points[idx_retained]
+    #             idx_retained = idx_retained.reshape(-1, 1)
+
+    #         idx_inv = np.setdiff1d(idx_all, idx_retained)
+    #         points_ground = points[idx_inv]
+
+    #         colors_ground = np.zeros_like(points_ground)
+    #         colors_ground[:, 0] = 1
+    #         colors_ground[:, 1] = 0.2
+    #         colors_ground[:, 2] = 0.2
+
+    #         point_cloud_ground = o3d.geometry.PointCloud()
+    #         point_cloud_ground.points = o3d.utility.Vector3dVector(points_ground)
+    #         point_cloud_ground.colors = o3d.utility.Vector3dVector(colors_ground)
+
+    #         # Добавление результатов в виджет для визуализации
+    #         self.openGLWidget.point_clouds[file_path + "_ground"] = point_cloud_ground
+    #         self.openGLWidget.update()
 
     def start_modeling(self):
         # Метод для запуска моделирования

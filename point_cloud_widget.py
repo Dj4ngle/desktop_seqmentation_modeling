@@ -15,7 +15,7 @@ class OpenGLWidget(QOpenGLWidget):
         self.models = {}
         self.scale_factor = 2
         self.last_mouse_position = None
-        self.rotation_x = -90
+        self.rotation_x = 0
         self.rotation_y = 0
         self.rotation_z = 0
         self.rotation_mode = "Z"
@@ -24,7 +24,8 @@ class OpenGLWidget(QOpenGLWidget):
         self.vbo = None
         self.num_points = 0
         self.color = (1.0, 1.0, 1.0)  # Белый цвет по умолчанию
-        
+
+
     def load_point_cloud(self, filename):
         # Определение формата файла по расширению
         file_extension = os.path.splitext(filename)[1].lower()
@@ -225,7 +226,7 @@ class OpenGLWidget(QOpenGLWidget):
                 self.rotation_x += delta.y() * rotation_sensitivity
                 self.rotation_y += delta.x() * rotation_sensitivity
             else:
-                self.rotation_z += delta.x() * rotation_sensitivity
+                self.rotation_z -= delta.x() * rotation_sensitivity
                 
             # Нормализуем углы поворота
             self.rotation_x = self.normalize_angle(self.rotation_x)
@@ -248,11 +249,19 @@ class OpenGLWidget(QOpenGLWidget):
     
     def wheelEvent(self, event):
         angle = event.angleDelta().y()
-        scale_factor_change = 0.5  # Коэффициент изменения масштаба
+        
+        # Определение коэффициента изменения масштаба
+        scale_factor_change = 1.1  # Увеличение или уменьшение масштаба на 10%
+        print(self.scale_factor)
         if angle > 0:
-            self.scale_factor += scale_factor_change
+            self.scale_factor *= scale_factor_change
         else:
-            self.scale_factor -= scale_factor_change
-            if self.scale_factor < 0.01:  # Предотвращение слишком маленького масштаба
-                self.scale_factor = 0.01
+            self.scale_factor /= scale_factor_change
+            
+        # Предотвращение слишком маленького или слишком большого масштаба
+        if self.scale_factor < 0.005:
+            self.scale_factor = 0.005
+        elif self.scale_factor > 10:
+            self.scale_factor = 10
+
         self.update()
