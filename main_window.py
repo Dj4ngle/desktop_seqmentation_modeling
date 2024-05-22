@@ -228,35 +228,18 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             if state == 2:  # Checkbox is checked
                 if os.path.exists(file_path):
                     self.openGLWidget.load_point_cloud(file_path)
-                    #self.update_properties_dock(file_path)
+                    self.update_properties_dock(file_path)
                 else:
                     print(f"Файл {file_path} не найден")
             elif state == 0:  # Checkbox is unchecked
                 if file_path in self.openGLWidget.point_clouds:
                     del self.openGLWidget.point_clouds[file_path]
                     self.openGLWidget.update()
-                    #self.clear_properties_dock()
-    
-    # def checkbox_changed(self, state):
-    #     checkbox = self.sender()
-    #     if checkbox:
-    #         file_path = checkbox.property("filePath")
-    #         if state == 2:  # Checkbox is checked
-    #             self.openGLWidget.load_point_cloud(file_path)  # Загрузка или использование кэша
-    #             self.update_properties_dock(file_path)
-    #         elif state == 0:  # Checkbox is unchecked
-    #             # Здесь не нужно удалять данные, просто скрываем их визуализацию
-    #             self.hide_point_cloud(file_path)
-
-    # def hide_point_cloud(self, file_path):
-    #     if file_path in self.openGLWidget.point_clouds:
-    #         del self.openGLWidget.point_clouds[file_path]  # Можно также просто скрыть без удаления
-    #         self.update()
+                    self.clear_properties_dock()
 
     def update_properties_dock(self, file_path):
-        if file_path in self.openGLWidget.point_clouds:
-            point_cloud = self.openGLWidget.point_clouds[file_path]
-            num_points = len(point_cloud.points)
+        if self.openGLWidget.point_clouds[file_path]['active']:
+            num_points = self.openGLWidget.vbo_data[file_path][2]
 
             self.clear_properties_dock()
             file_label = QLabel(f"Файл: {os.path.basename(file_path)}")
@@ -314,7 +297,11 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 las.write(save_path)
                 print(f"Файл: {file_path} сохранён как: {save_path}")
             elif file_extension == ".pcd":
-                pcd = self.openGLWidget.point_clouds[file_path]
+                points = self.openGLWidget.point_clouds[file_path]['data']
+                # Создаем объект PointCloud
+                pcd = o3d.geometry.PointCloud()
+                # Устанавливаем точки в объект PointCloud
+                pcd.points = o3d.utility.Vector3dVector(points)
                 o3d.io.write_point_cloud(save_path, pcd)
                 print(f"Файл: {file_path} сохранён как: {save_path}")
 
@@ -335,7 +322,11 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 elif original_ext == ".pcd":
                     # Сохраняем файл как .pcd
                     output_path = os.path.join(save_dir, file_name)
-                    pcd = self.openGLWidget.point_clouds[file_path]
+                    points = self.openGLWidget.point_clouds[file_path]['data']
+                    # Создаем объект PointCloud
+                    pcd = o3d.geometry.PointCloud()
+                    # Устанавливаем точки в объект PointCloud
+                    pcd.points = o3d.utility.Vector3dVector(points)
                     o3d.io.write_point_cloud(output_path, pcd)
                     print(f"Файл: {file_path} сохранён как: {output_path}")
 

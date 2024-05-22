@@ -28,7 +28,6 @@ class OpenGLWidget(QOpenGLWidget):
         self.point_clouds = {}
         self.vbo_data = {}
 
-
     def load_point_cloud(self, filename):
         if filename not in self.point_clouds:
             # Инициализация записи, если она еще не существует
@@ -59,41 +58,14 @@ class OpenGLWidget(QOpenGLWidget):
         color_vbo = vbo.VBO(np.array(colors, dtype=np.float32))
         self.vbo_data[filename] = (point_vbo, color_vbo, len(points_centered))
         self.point_clouds[filename] = {'active': True, 'data': points_centered}
+        self.scale_factor = self.calculate_scale_factor_for_all()
         self.update()
-    
-    # def load_point_cloud(self, filename):
-    #     if filename in self.point_clouds:
-    #         print(f"Использование кэшированного облака точек для: {filename}")
-    #         return  # Если файл уже загружен, пропускаем загрузку
-        
-    #     # Определение формата файла по расширению
-    #     file_extension = os.path.splitext(filename)[1].lower()
-
-    #     if file_extension == '.las':
-    #         las = laspy.read(filename)
-    #         points = np.vstack((las.x, las.y, las.z)).transpose()
-    #         colors = np.vstack((las.red, las.green, las.blue)).transpose() / 255.0
-    #     elif file_extension == '.pcd':
-    #         pcd = o3d.io.read_point_cloud(filename)
-    #         points = np.asarray(pcd.points)
-    #         colors = np.ones_like(points)  # Белый цвет по умолчанию
-    #     else:
-    #         print("Unsupported file format")
-    #         return
-
-    #     pcd = o3d.geometry.PointCloud()
-    #     pcd.points = o3d.utility.Vector3dVector(points)
-    #     pcd.colors = o3d.utility.Vector3dVector(colors)
-
-    #     self.point_clouds[filename] = pcd  # Сохранение в кэш
-    #     self.scale_factor = self.calculate_scale_factor_for_all()
-    #     self.update()
         
     def calculate_scale_factor_for_all(self):
         max_size = 0
 
         for pcd in self.point_clouds.values():
-            points = np.asarray(pcd.points)
+            points = np.asarray(pcd['data'])
             size = np.max(points, axis=0) - np.min(points, axis=0)
             max_size = max(max_size, np.max(size))
 
