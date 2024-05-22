@@ -29,7 +29,7 @@ def select_files_and_rotate():
         return
 
     # Создание матрицы поворота на 90 градусов вокруг оси X
-    rotation_matrix = o3d.geometry.get_rotation_matrix_from_xyz((np.pi / 2, 0, 0))
+    rotation_matrix = o3d.geometry.get_rotation_matrix_from_xyz((-np.pi / 2, 0, 0))
 
     # Поворот и сохранение каждого файла
     for file_path in file_paths:

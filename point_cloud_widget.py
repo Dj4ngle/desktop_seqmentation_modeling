@@ -13,11 +13,11 @@ class OpenGLWidget(QOpenGLWidget):
         super(OpenGLWidget, self).__init__(parent)
         self.point_clouds = {}
         self.models = {}
-        self.scale_factor = 2
+        self.scale_factor = 0
         self.last_mouse_position = None
-        self.rotation_x = 0
-        self.rotation_y = 0
-        self.rotation_z = 0
+        self.rotation_x = 1
+        self.rotation_y = 1
+        self.rotation_z = 1
         self.rotation_mode = "Z"
         self.point_cloud_position = QPointF(0, 0)  # Текущее положение облака точек
 
@@ -214,7 +214,7 @@ class OpenGLWidget(QOpenGLWidget):
         while angle < 0:
             angle += 360
         while angle >= 360:
-            angle -= 360
+            angle = 0
         return angle
 
     def mouseMoveEvent(self, event):
@@ -232,6 +232,7 @@ class OpenGLWidget(QOpenGLWidget):
             self.rotation_x = self.normalize_angle(self.rotation_x)
             self.rotation_y = self.normalize_angle(self.rotation_y)
             self.rotation_z = self.normalize_angle(self.rotation_z)
+
             
             self.last_mouse_position = event.position()
             self.update()
@@ -252,7 +253,6 @@ class OpenGLWidget(QOpenGLWidget):
         
         # Определение коэффициента изменения масштаба
         scale_factor_change = 1.1  # Увеличение или уменьшение масштаба на 10%
-        print(self.scale_factor)
         if angle > 0:
             self.scale_factor *= scale_factor_change
         else:

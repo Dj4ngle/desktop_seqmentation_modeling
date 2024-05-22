@@ -12,7 +12,7 @@ class ConsoleWidget(QPlainTextEdit):
     def write(self, message):
         if (isinstance(message, str) and message != '\n'):
             time_now = datetime.utcnow() + timedelta(hours=3)
-            time_str = time_now.strftime("%Y-%m-%d %H:%M:%S")
+            time_str = time_now.strftime("%H:%M:%S")
             message_with_time = f"[{time_str}] {message}"
             self.appendPlainText(message_with_time.strip())
         elif message != '\n':
