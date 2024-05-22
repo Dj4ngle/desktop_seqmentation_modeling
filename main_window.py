@@ -17,6 +17,8 @@ import pylas
 class MyMainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super(MyMainWindow, self).__init__()
+        self.dock_widgets = {}
+        self.current_dock = None
 
         self.setWindowIcon(QIcon("images/Icon.png"))
 
@@ -47,21 +49,17 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.menuCreator.saveAction.triggered.connect(self.save_selected_tree)
         self.menuCreator.exitAction.triggered.connect(QApplication.instance().quit)
         self.toolbarsCreator.earthExtractionAction.triggered.connect(lambda:
-                                                                     self.toggle_dock_widget('sampleDock',
-                                                                        self.ground_extraction_dock_widget,
+                                                                     self.toggle_dock_widget('ground_extraction',
                                                                         Qt.DockWidgetArea.LeftDockWidgetArea))
         self.toolbarsCreator.earthExtractionAction.triggered.connect(self.update_clouds_list)
         self.toolbarsCreator.segmentationAction.triggered.connect(lambda:
-                                                                     self.toggle_dock_widget('sampleDock',
-                                                                        self.segmentation_dock_widget,
+                                                                     self.toggle_dock_widget('segmentation',
                                                                         Qt.DockWidgetArea.LeftDockWidgetArea))
         self.toolbarsCreator.taxationAction.triggered.connect(lambda:
-                                                                     self.toggle_dock_widget('sampleDock',
-                                                                        self.taxation_dock_widget,
+                                                                     self.toggle_dock_widget('taxation',
                                                                         Qt.DockWidgetArea.LeftDockWidgetArea))
         self.toolbarsCreator.modelingAction.triggered.connect(lambda:
-                                                                     self.toggle_dock_widget('sampleDock',
-                                                                        self.modeling_dock_widget,
+                                                                     self.toggle_dock_widget('modeling',
                                                                         Qt.DockWidgetArea.LeftDockWidgetArea))
         self.toolbarsCreator.modelingAction.triggered.connect(self.show_default_modeling_widget)
 
@@ -78,11 +76,12 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.remove_button.clicked.connect(self.remove_selected_items)
 
         self.selected_files = []
-        self.dockWidgets = {}
         
         # Инициализация атрибута для DockWidget "Свойства"
         self.properties_dock = None
         self.properties_widget = None
+
+        self.init_dock_widgets()
         
     # def perform_ground_extraction(self, file_path):
     #     if file_path in self.openGLWidget.point_clouds:
@@ -276,15 +275,13 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 if widget:
                     widget.setParent(None)
 
-    def toggle_dock_widget(self, widget_id, create_widget_func, dock_area):
-        if widget_id in self.dockWidgets:
-            dock_widget = self.dockWidgets.pop(widget_id)
-            self.removeDockWidget(dock_widget)
-            dock_widget.deleteLater()
-        else:
-            dock_widget = create_widget_func()
+    def toggle_dock_widget(self, dock_widget_name, dock_area):
+        dock_widget = self.dock_widgets.get(dock_widget_name)
+        for widget in self.dock_widgets.values():
+            widget.hide()
+        if not dock_widget.isVisible():
             self.addDockWidget(dock_area, dock_widget)
-            self.dockWidgets[widget_id] = dock_widget
+            dock_widget.show()
 
     def save_selected_tree(self):
         selected_files = []

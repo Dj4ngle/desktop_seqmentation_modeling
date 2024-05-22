@@ -31,7 +31,16 @@ class Ui_MainWindow(object):
         # Стыковочные виджеты
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.files_dock_widget())
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.properties_dock_widget())
-        
+
+    def init_dock_widgets(self):
+        self.dock_widgets = {
+            'files': self.files_dock_widget(),
+            'ground_extraction': self.ground_extraction_dock_widget(),
+            'segmentation': self.segmentation_dock_widget(),
+            'taxation': self.taxation_dock_widget(),
+            'modeling': self.modeling_dock_widget()
+        }
+
     def properties_dock_widget(self):
         dock = QDockWidget('Свойства')
         dock.setAllowedAreas(QtCore.Qt.DockWidgetArea.AllDockWidgetAreas)
@@ -69,23 +78,25 @@ class Ui_MainWindow(object):
         widget.setLayout(layout)
         dock.setWidget(widget)
         return dock
-    
+
     def ground_extraction_dock_widget(self):
-        dock = QDockWidget('Удаление земли')
-        dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
-        widget = QWidget()
-        layout = QVBoxLayout()
+        if 'ground_extraction' not in self.dock_widgets:
+            dock = QDockWidget('Удаление земли')
+            dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+            widget = QWidget()
+            layout = QVBoxLayout()
 
-        self.clouds_list_widget = QListWidget()
-        layout.addWidget(self.clouds_list_widget)
+            self.clouds_list_widget = QListWidget()
+            layout.addWidget(self.clouds_list_widget)
 
-        run_button = QPushButton("Удалить землю")
-        run_button.clicked.connect(self.run_ground_extraction)
-        layout.addWidget(run_button)
+            run_button = QPushButton("Удалить землю")
+            run_button.clicked.connect(self.run_ground_extraction)
+            layout.addWidget(run_button)
 
-        widget.setLayout(layout)
-        dock.setWidget(widget)
-        return dock
+            widget.setLayout(layout)
+            dock.setWidget(widget)
+            self.dock_widgets['ground_extraction'] = dock
+        return self.dock_widgets['ground_extraction']
 
     def update_clouds_list(self):
         self.clouds_list_widget.clear()
@@ -152,84 +163,73 @@ class Ui_MainWindow(object):
         widget.setLayout(layout)
         dock.setWidget(widget)
         return dock
-    
+
     def modeling_dock_widget(self):
-        dock = QDockWidget('Моделирование')
-        dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+        if not hasattr(self, 'modeling_dock'):
+            self.modeling_dock = QDockWidget('Моделирование')
+            self.modeling_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+            widget = QWidget()
+            layout = QVBoxLayout()
+
+            # Создаем группу радиокнопок
+            self.method_radio_group = QtWidgets.QButtonGroup()
+            self.bpa_radio = QtWidgets.QRadioButton("BPA")
+            self.mesh_radio = QtWidgets.QRadioButton("Mesh")
+            self.hui_radio = QtWidgets.QRadioButton("Hui")
+            self.method_radio_group.addButton(self.bpa_radio)
+            self.method_radio_group.addButton(self.mesh_radio)
+            self.method_radio_group.addButton(self.hui_radio)
+            self.bpa_radio.setChecked(True)
+
+            # Подключение обработчика событий радиокнопок
+            self.method_radio_group.buttonClicked.connect(self.on_method_radio_button_clicked)
+
+            layout.addWidget(self.bpa_radio)
+            layout.addWidget(self.mesh_radio)
+            layout.addWidget(self.hui_radio)
+
+            self.bpa_widget = self.create_specific_modeling_widget("BPA")
+            self.mesh_widget = self.create_specific_modeling_widget("Mesh")
+            self.hui_widget = self.create_specific_modeling_widget("Hui")
+
+            # Добавляем виджеты в компоновку, но скрываем их
+            layout.addWidget(self.bpa_widget)
+            layout.addWidget(self.mesh_widget)
+            layout.addWidget(self.hui_widget)
+            self.show_default_modeling_widget()  # Показываем виджет по умолчанию
+
+            widget.setLayout(layout)
+            self.modeling_dock.setWidget(widget)
+        return self.modeling_dock
+
+    def create_specific_modeling_widget(self, method):
         widget = QWidget()
         layout = QVBoxLayout()
-
-        # Создаем группу радиокнопок для выбора метода моделирования
-        self.method_radio_group = QtWidgets.QButtonGroup()
-        self.bpa_radio = QtWidgets.QRadioButton("BPA")
-        self.mesh_radio = QtWidgets.QRadioButton("Mesh")
-        self.hui_radio = QtWidgets.QRadioButton("Hui")
-        self.method_radio_group.addButton(self.bpa_radio)
-        self.method_radio_group.addButton(self.mesh_radio)
-        self.method_radio_group.addButton(self.hui_radio)
-        self.bpa_radio.setChecked(True)  # Устанавливаем BPA как выбранный по умолчанию
-
-        # Подключаем обработчик событий для радиокнопок
-        self.method_radio_group.buttonClicked.connect(self.on_method_radio_button_clicked)
-
-        # Добавляем радиокнопки в компоновку
-        layout.addWidget(self.bpa_radio)
-        layout.addWidget(self.mesh_radio)
-        layout.addWidget(self.hui_radio)
-
-        # Создаем виджеты для каждого метода моделирования
-        self.bpa_widget = self.create_modeling_widget("BPA")
-        self.mesh_widget = self.create_modeling_widget("Mesh")
-        self.hui_widget = self.create_modeling_widget("Hui")
-        
-
-        # Добавляем виджеты в компоновку
-        layout.addWidget(self.bpa_widget)
-        layout.addWidget(self.mesh_widget)
-        layout.addWidget(self.hui_widget)
-
-        widget.setLayout(layout)
-        dock.setWidget(widget)
-        return dock
-    
-    def create_modeling_widget(self, method):
-        widget = QWidget()
-        layout = QVBoxLayout()
-
-        # Добавляем поля, слайдеры, лейблы и кнопку для каждого метода моделирования
         label = QLabel(f"Метод моделирования: {method}")
-        slider1_label = QLabel("Slider 1:")
         slider1 = QSlider(Qt.Orientation.Horizontal)
         slider1.setRange(0, 100)
         slider1.setValue(50)
-        slider2_label = QLabel("Slider 2:")
         slider2 = QSlider(Qt.Orientation.Horizontal)
         slider2.setRange(0, 100)
         slider2.setValue(50)
-        slider3_label = QLabel("Slider 3:")
         slider3 = QSlider(Qt.Orientation.Horizontal)
         slider3.setRange(0, 100)
         slider3.setValue(50)
         button = QPushButton("Моделировать")
 
-        # Добавляем поля, слайдеры, лейблы и кнопку в компоновку
         layout.addWidget(label)
-        layout.addWidget(slider1_label)
         layout.addWidget(slider1)
-        layout.addWidget(slider2_label)
         layout.addWidget(slider2)
-        layout.addWidget(slider3_label)
         layout.addWidget(slider3)
         layout.addWidget(button)
-
         widget.setLayout(layout)
-        widget.hide()  # Скрываем виджет, пока он не выбран
+        widget.hide()  # Скрываем виджет
 
         return widget
 
     def on_method_radio_button_clicked(self, button):
         if button == self.bpa_radio:
-            self.show_default_modeling_widget
+            self.show_default_modeling_widget()
         elif button == self.mesh_radio:
             self.bpa_widget.hide()
             self.mesh_widget.show()
@@ -238,7 +238,7 @@ class Ui_MainWindow(object):
             self.bpa_widget.hide()
             self.mesh_widget.hide()
             self.hui_widget.show()
-    
+
     def show_default_modeling_widget(self):
         self.bpa_widget.show()
         self.mesh_widget.hide()
