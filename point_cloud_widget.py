@@ -25,8 +25,8 @@ class OpenGLWidget(QOpenGLWidget):
         self.num_points = 0
         self.color = (1.0, 1.0, 1.0)  # Белый цвет по умолчанию
 
-        self.point_clouds = {}
         self.vbo_data = {}
+        self.vbo_data_models = {}
 
 
     def load_point_cloud(self, filename):
@@ -60,34 +60,35 @@ class OpenGLWidget(QOpenGLWidget):
         self.vbo_data[filename] = (point_vbo, color_vbo, len(points_centered))
         self.point_clouds[filename] = {'active': True, 'data': points_centered}
         self.update()
-    
-    # def load_point_cloud(self, filename):
-    #     if filename in self.point_clouds:
-    #         print(f"Использование кэшированного облака точек для: {filename}")
-    #         return  # Если файл уже загружен, пропускаем загрузку
-        
-    #     # Определение формата файла по расширению
-    #     file_extension = os.path.splitext(filename)[1].lower()
 
-    #     if file_extension == '.las':
-    #         las = laspy.read(filename)
-    #         points = np.vstack((las.x, las.y, las.z)).transpose()
-    #         colors = np.vstack((las.red, las.green, las.blue)).transpose() / 255.0
-    #     elif file_extension == '.pcd':
-    #         pcd = o3d.io.read_point_cloud(filename)
-    #         points = np.asarray(pcd.points)
-    #         colors = np.ones_like(points)  # Белый цвет по умолчанию
-    #     else:
-    #         print("Unsupported file format")
-    #         return
+    def load_model(self, filename):
+        if filename not in self.models:
+            self.models[filename] = {'active': False, 'data': None}
 
-    #     pcd = o3d.geometry.PointCloud()
-    #     pcd.points = o3d.utility.Vector3dVector(points)
-    #     pcd.colors = o3d.utility.Vector3dVector(colors)
+        if filename in self.vbo_data_models:
+            self.models[filename]['active'] = True
+            self.update()
+            return
 
-    #     self.point_clouds[filename] = pcd  # Сохранение в кэш
-    #     self.scale_factor = self.calculate_scale_factor_for_all()
-    #     self.update()
+        file_extension = os.path.splitext(filename)[1].lower()
+        if file_extension == '.obj':
+            scene = pywavefront.Wavefront(filename, collect_faces=True)
+            vertices = []
+            for _, mesh in scene.meshes.items():
+                for face in mesh.faces:
+                    vertices.extend([scene.vertices[index] for index in face])
+            points = np.array(vertices, dtype=np.float32)
+            colors = np.ones((len(points), 3))  # Белый цвет для всех вершин
+        else:
+            print("Unsupported file format")
+            return
+
+        points_centered = points - np.mean(points, axis=0)
+        point_vbo = vbo.VBO(points_centered)
+        color_vbo = vbo.VBO(colors)
+        self.vbo_data_models[filename] = (point_vbo, color_vbo, len(points_centered))
+        self.models[filename] = {'active': True, 'data': points_centered}
+        self.update()
         
     def calculate_scale_factor_for_all(self):
         max_size = 0
@@ -157,19 +158,6 @@ class OpenGLWidget(QOpenGLWidget):
         # Сохранение количества точек для последующего рендеринга
         self.num_points = points.shape[0]
 
-    def find_model_center(self, model):
-        # Вычисление средних значений координат всех вершин
-        sum_x = sum_y = sum_z = 0
-        for vertex in model.vertices:
-            sum_x += vertex[0]
-            sum_y += vertex[1]
-            sum_z += vertex[2]
-        num_vertices = len(model.vertices)
-        center_x = sum_x / num_vertices
-        center_y = sum_y / num_vertices
-        center_z = sum_z / num_vertices
-        return center_x, center_y, center_z
-
     def paintGL(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glPushMatrix()
@@ -199,25 +187,29 @@ class OpenGLWidget(QOpenGLWidget):
                 point_vbo.unbind()
                 color_vbo.unbind()
 
+        glEnableClientState(GL_VERTEX_ARRAY)
         # Отрисовка всех моделей
-        for model in self.models.values():
-            # Центрирование модели (можно оптимизировать)
-            center_x, center_y, center_z = self.find_model_center(model)
-            glTranslatef(-center_x, -center_y, -center_z)
+        for model, model_info in self.models.items():
+            if model_info['active']:  # Проверяем, активна ли модель для отображения
+                vertex_vbo, color_vbo, num_indices = self.vbo_data_models[model]
 
-            for mesh in model.mesh_list:
-                glBegin(GL_TRIANGLES)
-                for face in mesh.faces:
-                    for vertex_i in face:
-                        glVertex3f(*model.vertices[vertex_i])
-                glEnd()
+                vertex_vbo.bind()
+                glVertexPointer(3, GL_FLOAT, 0, None)
 
+                color_vbo.bind()
+                glColorPointer(3, GL_FLOAT, 0, None)
+                glPushMatrix()
+
+                # Отрисовываем с использованием индексного буфера
+                glDrawArrays(GL_TRIANGLES, 0, num_indices)
+
+                glPopMatrix()
+
+                vertex_vbo.unbind()
+                color_vbo.unbind()
+
+        glDisableClientState(GL_VERTEX_ARRAY)
         glPopMatrix()
-        self.update()
-
-    def load_model(self, filename):
-        model = pywavefront.Wavefront(filename, collect_faces=True)
-        self.models[filename] = model
         self.update()
 
     def set_scale_factor(self, scale):

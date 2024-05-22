@@ -1,6 +1,8 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QDockWidget, QTextEdit, QListWidgetItem, QCheckBox, QRadioButton, QSlider, QSizePolicy,
                              QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QToolBar, QMenu, QStatusBar, QListWidget, QPlainTextEdit, QButtonGroup )
+
+from modeler import modeler
 from point_cloud_widget import OpenGLWidget
 from PyQt6.QtCore import Qt
 from datetime import datetime, timedelta
@@ -215,6 +217,7 @@ class Ui_MainWindow(object):
         slider3.setRange(0, 100)
         slider3.setValue(50)
         button = QPushButton("Моделировать")
+        button.clicked.connect(self.start_modeling)
 
         layout.addWidget(label)
         layout.addWidget(slider1)
@@ -225,6 +228,20 @@ class Ui_MainWindow(object):
         widget.hide()  # Скрываем виджет
 
         return widget
+
+    def start_modeling(self):
+        # Метод для запуска моделирования
+        selected_files = []
+        for index in range(self.listWidget.count()):
+            item = self.listWidget.item(index)
+            checkbox = self.listWidget.itemWidget(item)
+            if checkbox.isChecked():
+                selected_files.append(checkbox.property("filePath"))
+        print("Выбранные для моделирования файлы: ", selected_files)
+        for file in selected_files:
+            base_name, _ = os.path.splitext(file)
+            new_file_path = base_name + '.obj'
+            modeler(file, new_file_path)
 
     def on_method_radio_button_clicked(self, button):
         if button == self.bpa_radio:

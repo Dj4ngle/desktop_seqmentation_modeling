@@ -153,14 +153,10 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             self.openGLWidget.point_clouds[ground_file_path] = ground
             self.openGLWidget.point_clouds[objects_file_path] = objects
             self.openGLWidget.update()
-    
-    def start_modeling(self):
-        # Метод для запуска моделирования
-        pass
 
     def select_files(self):
         # Метод для выбора файлов
-        files, _ = QFileDialog.getOpenFileNames(self, "Выбрать файлы", "", "LAS and PCD files (*.las *.pcd)")
+        files, _ = QFileDialog.getOpenFileNames(self, "Выбрать файлы", "", "LAS and PCD files (*.las *.pcd *.obj)")
 
         if files:
             for file in files:
@@ -227,8 +223,12 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             file_path = checkbox.property("filePath")
             if state == 2:  # Checkbox is checked
                 if os.path.exists(file_path):
-                    self.openGLWidget.load_point_cloud(file_path)
-                    #self.update_properties_dock(file_path)
+                    _, file_extension = os.path.splitext(file_path)
+                    if file_extension == ".obj":
+                        self.openGLWidget.load_model(file_path)
+                    else:
+                        self.openGLWidget.load_point_cloud(file_path)
+                        #self.update_properties_dock(file_path)
                 else:
                     print(f"Файл {file_path} не найден")
             elif state == 0:  # Checkbox is unchecked
@@ -236,6 +236,9 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                     del self.openGLWidget.point_clouds[file_path]
                     self.openGLWidget.update()
                     #self.clear_properties_dock()
+                elif file_path in self.openGLWidget.models:
+                    del self.openGLWidget.models[file_path]
+                    self.openGLWidget.update()
     
     # def checkbox_changed(self, state):
     #     checkbox = self.sender()
