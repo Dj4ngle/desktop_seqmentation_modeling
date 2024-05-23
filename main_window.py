@@ -16,6 +16,7 @@ from tool_bar import ToolBar
 from sklearn.cluster import DBSCAN
 import pylas
 from OpenGL.arrays import vbo
+import random
 
 
 class MyMainWindow(QMainWindow, Ui_MainWindow):
@@ -23,7 +24,6 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         super(MyMainWindow, self).__init__()
         self.dock_widgets = {}
         self.current_dock = None
-        self.current_file_path = None
 
         self.setWindowIcon(QIcon("images/Icon.png"))
 
@@ -398,16 +398,17 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             return
 
         file_path = selected_items[0].text()
-        eps = float(self.segmentation_eps_input.text())
-        min_samples = int(self.segmentation_min_samples_input.text())
+        eps = float(self.segmentation_eps_input.text()) #0.78
+        min_samples = int(self.segmentation_min_samples_input.text()) #132
         print(f"Сегментация запускается с eps: {eps} и min_samples: {min_samples}")
         
         # Загрузка и сегментация облака точек
-        points = self.openGLWidget.point_clouds[file_path]['data']
+        points = self.openGLWidget.vbo_data[file_path][0]
+        points_array = points.reshape(-1, 3)
         pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points)
+        pcd.points = o3d.utility.Vector3dVector(points_array)
 
-        db = DBSCAN(eps=eps, min_samples=min_samples).fit(points)
+        db = DBSCAN(eps=eps, min_samples=min_samples).fit(points_array)
         labels = db.labels_
         
         # Создание и добавление сегментированных облаков точек в список и в VBO
@@ -415,14 +416,25 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         for label in unique_labels:
             if label == -1:
                 continue  # Пропустить шум
-            segment_points = points[labels == label]
-            segment_pcd = o3d.geometry.PointCloud()
-            segment_pcd.points = o3d.utility.Vector3dVector(segment_points)
+            segment_points = points_array[labels == label]
             segment_file_path = f"{file_path}_segment_{label}.pcd"
-            o3d.io.write_point_cloud(segment_file_path, segment_pcd)
+            print(segment_file_path)
+            self.openGLWidget.point_clouds[segment_file_path] = {'active': True, 'data': segment_points}
+
+            # Создаем массив цветов для каждой точки в сегменте
+            colors_ground = np.zeros((len(segment_points), 3))  # создаем массив для RGB значений
+            colors_ground[:, 0] = random.random()  # случайный красный компонент для всех точек сегмента
+            colors_ground[:, 1] = random.random()  # случайный зеленый компонент
+            colors_ground[:, 2] = random.random()  # случайный синий компонент
 
             # Добавление в список и в VBO
-            item = QListWidgetItem(segment_file_path, self.segmentation_list_widget)
-            self.load_point_cloud(segment_file_path)  # Предполагается, что есть метод загрузки в OpenGLWidget
+            objects_points = segment_points
+            objects_colors = colors_ground  # Белый цвет по умолчанию
+            point_vbo = vbo.VBO(objects_points.astype(np.float32))
+            color_vbo = vbo.VBO(objects_colors.astype(np.float32))
+            self.openGLWidget.vbo_data[segment_file_path] = (point_vbo, color_vbo, len(objects_points))
+
+            self.openGLWidget.load_model(segment_file_path)
+            self.add_file_to_list_widget(segment_file_path)
 
         print(f"Сегментация завершена, найдено {len(unique_labels)} компонентов")

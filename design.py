@@ -135,7 +135,7 @@ class Ui_MainWindow(object):
             self.add_file_to_list_widget(objects_cloud_path)
         
         self.clouds_list_widget.clear()
-    
+
     def segmentation_dock_widget(self):
         if 'segmentation' not in self.dock_widgets:
             segmentation_dock = QDockWidget("Сегментация деревьев")
@@ -148,20 +148,20 @@ class Ui_MainWindow(object):
 
             # Параметры для сегментации
             params_layout = QVBoxLayout()
-            segmentation_eps_input = QLineEdit()
-            segmentation_min_samples_input = QLineEdit()
+            self.segmentation_eps_input = QLineEdit()
+            self.segmentation_min_samples_input = QLineEdit()
 
             # Создаем валидатор для QLineEdit, который позволяет вводить только цифры и точку
             regex = QRegularExpression(r"^[0-9]*\.?[0-9]*$")
             validator = QRegularExpressionValidator(regex)
             
-            segmentation_eps_input.setValidator(validator)
-            segmentation_min_samples_input.setValidator(validator)
+            self.segmentation_eps_input.setValidator(validator)
+            self.segmentation_min_samples_input.setValidator(validator)
 
             params_layout.addWidget(QLabel("Epsilon (eps):"))
-            params_layout.addWidget(segmentation_eps_input)
+            params_layout.addWidget(self.segmentation_eps_input)
             params_layout.addWidget(QLabel("Min Samples:"))
-            params_layout.addWidget(segmentation_min_samples_input)
+            params_layout.addWidget(self.segmentation_min_samples_input)
             
             layout.addLayout(params_layout)
 
