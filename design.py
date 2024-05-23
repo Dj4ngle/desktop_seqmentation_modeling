@@ -3,6 +3,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QDockWidget, QTextEdit, 
                              QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QToolBar, QMenu, QStatusBar, QListWidget, QPlainTextEdit, QButtonGroup )
 
 from modeler import modeler
+from modeler2 import modeler2
 from point_cloud_widget import OpenGLWidget
 from PyQt6.QtCore import Qt
 from datetime import datetime, timedelta
@@ -127,13 +128,7 @@ class Ui_MainWindow(object):
             ground_checkbox.stateChanged.connect(self.checkbox_changed)
             
             # Добавляем облако точек объектов в list_widget
-            objects_item = QListWidgetItem(self.listWidget)
-            objects_checkbox = QCheckBox(objects_cloud_path)
-            objects_checkbox.setChecked(True)
-            objects_checkbox.setProperty("filePath", objects_cloud_path)
-            self.listWidget.setItemWidget(objects_item, objects_checkbox)
-            objects_item.setSizeHint(objects_checkbox.sizeHint())
-            objects_checkbox.stateChanged.connect(self.checkbox_changed)
+            self.add_file_to_list_widget(objects_cloud_path)
         
         self.clouds_list_widget.clear()
 
@@ -176,10 +171,8 @@ class Ui_MainWindow(object):
             self.method_radio_group = QtWidgets.QButtonGroup()
             self.bpa_radio = QtWidgets.QRadioButton("BPA")
             self.mesh_radio = QtWidgets.QRadioButton("Mesh")
-            self.hui_radio = QtWidgets.QRadioButton("Hui")
             self.method_radio_group.addButton(self.bpa_radio)
             self.method_radio_group.addButton(self.mesh_radio)
-            self.method_radio_group.addButton(self.hui_radio)
             self.bpa_radio.setChecked(True)
 
             # Подключение обработчика событий радиокнопок
@@ -187,16 +180,13 @@ class Ui_MainWindow(object):
 
             layout.addWidget(self.bpa_radio)
             layout.addWidget(self.mesh_radio)
-            layout.addWidget(self.hui_radio)
 
             self.bpa_widget = self.create_specific_modeling_widget("BPA")
             self.mesh_widget = self.create_specific_modeling_widget("Mesh")
-            self.hui_widget = self.create_specific_modeling_widget("Hui")
 
             # Добавляем виджеты в компоновку, но скрываем их
             layout.addWidget(self.bpa_widget)
             layout.addWidget(self.mesh_widget)
-            layout.addWidget(self.hui_widget)
             self.show_default_modeling_widget()  # Показываем виджет по умолчанию
 
             widget.setLayout(layout)
@@ -207,21 +197,57 @@ class Ui_MainWindow(object):
         widget = QWidget()
         layout = QVBoxLayout()
         label = QLabel(f"Метод моделирования: {method}")
+
+        # Создаем слайдер 1 для настройки радиуса нормалей
         slider1 = QSlider(Qt.Orientation.Horizontal)
-        slider1.setRange(0, 100)
-        slider1.setValue(50)
+        slider1.setRange(1, 100)  # Работаем с целыми числами для лучшей гранулярности
+        slider1.setValue(10)  # Начальное значение 0.1 (10 / 100)
+        label1 = QLabel(f"Радиус нормалей: {slider1.value() / 100:.2f}")
+        slider1.valueChanged.connect(lambda value: label1.setText(f"Радиус нормалей: {value / 100:.2f}"))
+
+        # Создаем слайдер 2 для максимального количества соседей
         slider2 = QSlider(Qt.Orientation.Horizontal)
-        slider2.setRange(0, 100)
-        slider2.setValue(50)
+        slider2.setRange(5, 100)
+        slider2.setValue(30)
+        label2 = QLabel(f"Макс. кол-во соседей: {slider2.value()}")
+        slider2.valueChanged.connect(lambda value: label2.setText(f"Макс. кол-во соседей: {value}"))
+
+        # Создаем слайдер 3 для настройки радиуса пивота или глубины
         slider3 = QSlider(Qt.Orientation.Horizontal)
-        slider3.setRange(0, 100)
-        slider3.setValue(50)
+
+        # Настройка слайдера в зависимости от метода
+        if method == "BPA":
+            slider3.setRange(10, 200)  # Диапазон для метода BPA
+            slider3.setValue(140)  # Начальное значение 1.4 (140 / 100)
+            label_text = f"Радиус пивота: {slider3.value() / 100:.1f}"
+        else:
+            slider3.setRange(1, 150)  # Диапазон для других методов
+            slider3.setValue(5)  # Начальное значение 9
+            label_text = f"Глубина: {slider3.value() / 1000:.3f}"
+
+        # Создаем метку с текстом в зависимости от метода
+        label3 = QLabel(label_text)
+
+        # Подключаем сигнал изменения значения слайдера к слоту для обновления метки
+        def update_label():
+            if method == "BPA":
+                label3.setText(f"Радиус пивота: {slider3.value() / 100:.1f}")
+            else:
+                label3.setText(f"Глубина: {slider3.value() / 1000:.3f}")
+
+        slider3.valueChanged.connect(update_label)
+
         button = QPushButton("Моделировать")
-        button.clicked.connect(self.start_modeling)
+        button.clicked.connect(lambda: self.start_modeling(slider1.value(), slider2.value(),
+                                                           slider3.value()) if method == "BPA" else self.start_modeling2(
+            slider1.value(), slider2.value(), slider3.value()))
 
         layout.addWidget(label)
+        layout.addWidget(label1)
         layout.addWidget(slider1)
+        layout.addWidget(label2)
         layout.addWidget(slider2)
+        layout.addWidget(label3)
         layout.addWidget(slider3)
         layout.addWidget(button)
         widget.setLayout(layout)
@@ -229,7 +255,26 @@ class Ui_MainWindow(object):
 
         return widget
 
-    def start_modeling(self):
+    def start_modeling(self, slider1, slider2, slider3):
+        #Метод для запуска моделирования
+        selected_files = []
+        for index in range(self.listWidget.count()):
+            item = self.listWidget.item(index)
+            checkbox = self.listWidget.itemWidget(item)
+            if checkbox.isChecked():
+                selected_files.append(checkbox.property("filePath"))
+        print("Выбранные для моделирования файлы: ", selected_files)
+        for file in selected_files:
+                base_name, _ = os.path.splitext(file)
+                new_file_path = base_name + '.obj'
+                path = modeler(file, new_file_path, slider1, slider2, slider3)
+                if path:
+                    self.openGLWidget.load_model(path)
+                    self.add_file_to_list_widget(path)
+
+
+
+    def start_modeling2(self, slider1, slider2, slider3):
         # Метод для запуска моделирования
         selected_files = []
         for index in range(self.listWidget.count()):
@@ -241,7 +286,10 @@ class Ui_MainWindow(object):
         for file in selected_files:
             base_name, _ = os.path.splitext(file)
             new_file_path = base_name + '.obj'
-            modeler(file, new_file_path)
+            path = modeler2(file, new_file_path, slider1, slider2, slider3)
+            if path:
+                self.openGLWidget.load_model(path)
+                self.add_file_to_list_widget(path)
 
     def on_method_radio_button_clicked(self, button):
         if button == self.bpa_radio:
@@ -249,13 +297,17 @@ class Ui_MainWindow(object):
         elif button == self.mesh_radio:
             self.bpa_widget.hide()
             self.mesh_widget.show()
-            self.hui_widget.hide()
-        elif button == self.hui_radio:
-            self.bpa_widget.hide()
-            self.mesh_widget.hide()
-            self.hui_widget.show()
 
     def show_default_modeling_widget(self):
         self.bpa_widget.show()
         self.mesh_widget.hide()
-        self.hui_widget.hide()
+
+    def add_file_to_list_widget(self, file_path):
+        # Добавляем облако точек земли в list_widget
+        ground_item = QListWidgetItem(self.listWidget)
+        ground_checkbox = QCheckBox(file_path)
+        ground_checkbox.setChecked(True)
+        ground_checkbox.setProperty("filePath", file_path)
+        self.listWidget.setItemWidget(ground_item, ground_checkbox)
+        ground_item.setSizeHint(ground_checkbox.sizeHint())
+        ground_checkbox.stateChanged.connect(self.checkbox_changed)

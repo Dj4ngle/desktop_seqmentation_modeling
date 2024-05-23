@@ -29,7 +29,7 @@ class ToolBar:
         self.earthExtractionAction = QAction(QIcon("images/ground_extraction.png"), "Удаление земли", self.parent)
         self.segmentationAction = QAction(QIcon("images/segmentation.png"), "Сегментация", self.parent)
         self.taxationAction = QAction(QIcon("images/taxation.png"), "Таксация", self.parent)
-        self.modelingAction = QAction(QIcon("images/check1True.png"), "Моделирование", self.parent)
+        self.modelingAction = QAction(QIcon("images/modeling.png"), "Моделирование", self.parent)
         self.frontViewAction = QAction(QIcon("images/FrontView.png"), "Вид спереди", self.parent)
         self.backViewAction = QAction(QIcon("images/BackView.png"), "Вид сзади", self.parent)
         self.leftSideViewAction = QAction(QIcon("images/SideViewLeft.png"), "Вид сбоку", self.parent)

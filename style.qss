@@ -165,3 +165,8 @@ QPlainTextEdit{
     margin: 10px;
     border: 2px solid #494950;
 }
+
+QRadioButton{
+    background-color: #494950;
+    color: #CCCEDB;
+}

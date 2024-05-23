@@ -59,6 +59,7 @@ class OpenGLWidget(QOpenGLWidget):
         color_vbo = vbo.VBO(np.array(colors, dtype=np.float32))
         self.vbo_data[filename] = (point_vbo, color_vbo, len(points_centered))
         self.point_clouds[filename] = {'active': True, 'data': points_centered}
+        self.scale_factor = self.calculate_scale_factor_for_all()
         self.update()
 
     def load_model(self, filename):
@@ -74,7 +75,9 @@ class OpenGLWidget(QOpenGLWidget):
         if file_extension == '.obj':
             scene = pywavefront.Wavefront(filename, collect_faces=True)
             vertices = []
+            total_faces = 0
             for _, mesh in scene.meshes.items():
+                total_faces += len(mesh.faces)
                 for face in mesh.faces:
                     vertices.extend([scene.vertices[index] for index in face])
             points = np.array(vertices, dtype=np.float32)
@@ -87,17 +90,30 @@ class OpenGLWidget(QOpenGLWidget):
         point_vbo = vbo.VBO(points_centered)
         color_vbo = vbo.VBO(colors)
         self.vbo_data_models[filename] = (point_vbo, color_vbo, len(points_centered))
-        self.models[filename] = {'active': True, 'data': points_centered}
+        self.models[filename] = {
+            'active': True,
+            'data': points_centered,
+            'num_polygons': total_faces
+        }
+        self.scale_factor = self.calculate_scale_factor_for_all()
         self.update()
-        
+
     def calculate_scale_factor_for_all(self):
-        max_size = 0
+        max_cloud = 0
+        max_model = 0
 
-        for pcd in self.point_clouds.values():
-            points = np.asarray(pcd.points)
-            size = np.max(points, axis=0) - np.min(points, axis=0)
-            max_size = max(max_size, np.max(size))
+        if self.vbo_data:
+            for pcd in self.vbo_data.values():
+                points = pcd[0]
+                size = np.max(points, axis=0) - np.min(points, axis=0)
+                max_cloud = max(max_cloud, np.max(size))
+        if self.vbo_data_models:
+            for model in self.vbo_data_models.values():
+                points = model[0]
+                size = np.max(points, axis=0) - np.min(points, axis=0)
+                max_model = max(max_model, np.max(size))
 
+        max_size = max(max_cloud, max_model)
         scale_factor = 1.5 / max_size if max_size != 0 else 1
         return scale_factor
         
@@ -134,29 +150,6 @@ class OpenGLWidget(QOpenGLWidget):
 
         self.vbo = vbo.VBO(np.array([], dtype=np.float32))
         self.color_vbo = vbo.VBO(np.array([], dtype=np.float32))
-
-    def update_point_cloud(self, point_cloud):
-        # Получение данных точек из объекта PointCloud
-        points = np.asarray(point_cloud.points)
-        colors = np.asarray(point_cloud.colors)
-        # Убедимся, что данные существуют
-        if points.size == 0:
-            return  # Выходим, если нет данных
-        
-            # Если массив цветов пустой, устанавливаем белый цвет по умолчанию
-        if colors.size == 0:
-            colors = np.ones_like(points) * [1.0, 1.0, 1.0]  # Белый цвет
-
-        # Преобразование данных точек для использования в VBO
-        if self.vbo is None:
-            self.vbo = vbo.VBO(points.astype(np.float32))
-            self.color_vbo = vbo.VBO(colors.astype(np.float32))
-        else:
-            self.vbo.set_array(points.astype(np.float32))
-            self.color_vbo.set_array(colors.astype(np.float32))
-
-        # Сохранение количества точек для последующего рендеринга
-        self.num_points = points.shape[0]
 
     def paintGL(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
