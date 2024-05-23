@@ -66,6 +66,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.toolbarsCreator.taxationAction.triggered.connect(lambda:
                                                                      self.toggle_dock_widget('taxation',
                                                                         Qt.DockWidgetArea.LeftDockWidgetArea))
+        self.toolbarsCreator.taxationAction.triggered.connect(lambda:
+                                                                     self.update_list(self.taxation_list_widget))
         self.toolbarsCreator.modelingAction.triggered.connect(lambda:
                                                                      self.toggle_dock_widget('modeling',
                                                                         Qt.DockWidgetArea.LeftDockWidgetArea))
@@ -438,3 +440,4 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             self.add_file_to_list_widget(segment_file_path)
 
         print(f"Сегментация завершена, найдено {len(unique_labels)} компонентов")
+        

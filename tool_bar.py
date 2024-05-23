@@ -7,8 +7,8 @@ class ToolBar:
         self.parent = parent
 
     def _createToolBars(self):
-        # Создание панели инструментов "Панель управления взаимодействия"
-        editToolBar = QToolBar("Панель управления взаимодействия", self.parent)
+        # Создание панели инструментов "Панель управленя взаимодействием"
+        editToolBar = QToolBar("Панель управления взаимодействием", self.parent)
         editToolBar.addAction(self.earthExtractionAction)
         editToolBar.addAction(self.segmentationAction)
         editToolBar.addAction(self.taxationAction)
