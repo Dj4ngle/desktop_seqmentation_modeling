@@ -164,21 +164,22 @@ class OpenGLWidget(QOpenGLWidget):
         # Отрисовка всех облаков точек
         for filename, cloud_info in self.point_clouds.items():
             if cloud_info['active']:  # Проверяем, активно ли облако
-                point_vbo, color_vbo, num_points = self.vbo_data[filename]
-                point_vbo.bind()
-                glVertexPointer(3, GL_FLOAT, 0, None)
-                glEnableClientState(GL_VERTEX_ARRAY)
+                if filename in self.vbo_data:
+                    point_vbo, color_vbo, num_points = self.vbo_data[filename]
+                    point_vbo.bind()
+                    glVertexPointer(3, GL_FLOAT, 0, None)
+                    glEnableClientState(GL_VERTEX_ARRAY)
 
-                color_vbo.bind()
-                glColorPointer(3, GL_FLOAT, 0, None)
-                glEnableClientState(GL_COLOR_ARRAY)
+                    color_vbo.bind()
+                    glColorPointer(3, GL_FLOAT, 0, None)
+                    glEnableClientState(GL_COLOR_ARRAY)
 
-                glDrawArrays(GL_POINTS, 0, num_points)
+                    glDrawArrays(GL_POINTS, 0, num_points)
 
-                glDisableClientState(GL_VERTEX_ARRAY)
-                glDisableClientState(GL_COLOR_ARRAY)
-                point_vbo.unbind()
-                color_vbo.unbind()
+                    glDisableClientState(GL_VERTEX_ARRAY)
+                    glDisableClientState(GL_COLOR_ARRAY)
+                    point_vbo.unbind()
+                    color_vbo.unbind()
 
         glEnableClientState(GL_VERTEX_ARRAY)
         # Отрисовка всех моделей

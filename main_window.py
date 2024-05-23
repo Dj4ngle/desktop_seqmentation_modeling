@@ -15,6 +15,7 @@ from menu_bar import MenuBar
 from tool_bar import ToolBar
 from sklearn.cluster import DBSCAN
 import pylas
+from OpenGL.arrays import vbo
 
 
 class MyMainWindow(QMainWindow, Ui_MainWindow):
@@ -87,28 +88,6 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
         self.init_dock_widgets()
 
-
-    # def perform_ground_extraction(self, file_path):
-    #     if file_path in self.openGLWidget.point_clouds:
-    #         original_pcd = self.openGLWidget.point_clouds[file_path]
-
-    #         # Пример простой сегментации земли
-    #         plane_model, inliers = original_pcd.segment_plane(distance_threshold=0.6,
-    #                                                         ransac_n=4,
-    #                                                         num_iterations=1000)
-    #         ground = original_pcd.select_by_index(inliers)
-    #         objects = original_pcd.select_by_index(inliers, invert=True)
-
-    #         # Изменяем расширение файла и добавляем _ground и _objects
-    #         file_extension = os.path.splitext(file_path)[1]
-    #         ground_file_path = file_path.replace(file_extension, "_ground" + file_extension)
-    #         objects_file_path = file_path.replace(file_extension, "_objects" + file_extension)
-
-    #         # Добавляем результаты в виджет для визуализации
-    #         self.openGLWidget.point_clouds[ground_file_path] = ground
-    #         self.openGLWidget.point_clouds[objects_file_path] = objects
-    #         self.openGLWidget.update()
-
     def perform_ground_extraction(self, file_path):
         if file_path in self.openGLWidget.point_clouds:
             points = self.openGLWidget.point_clouds[file_path]['data']
@@ -144,6 +123,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             objects = o3d.geometry.PointCloud()
             objects.points = o3d.utility.Vector3dVector(points_retained)
 
+
             # Окрашивание точек земли
             colors_ground = np.zeros(points_ground.shape)
             colors_ground[:, 0] = 1
@@ -158,7 +138,19 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
             # Добавляем результаты в виджет для визуализации
             self.openGLWidget.point_clouds[ground_file_path] = {'active': True, 'data': ground}
+            ground_points = np.asarray(ground.points)
+            ground_colors = np.asarray(ground.colors)
+            point_vbo = vbo.VBO(ground_points.astype(np.float32))
+            color_vbo = vbo.VBO(ground_colors.astype(np.float32))
+            self.openGLWidget.vbo_data[ground_file_path] = (point_vbo, color_vbo, len(ground_points))
+
             self.openGLWidget.point_clouds[objects_file_path] = {'active': True, 'data': objects}
+            objects_points = np.asarray(objects.points)
+            objects_colors = np.ones_like(points)  # Белый цвет по умолчанию
+            point_vbo = vbo.VBO(objects_points.astype(np.float32))
+            color_vbo = vbo.VBO(objects_colors.astype(np.float32))
+            self.openGLWidget.vbo_data[objects_file_path] = (point_vbo, color_vbo, len(objects_points))
+
             self.openGLWidget.update()
 
     def select_files(self):
@@ -270,23 +262,21 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         if checkbox:
             file_path = checkbox.property("filePath")
             if state == 2:  # Checkbox is checked
-                if os.path.exists(file_path):
-                    _, file_extension = os.path.splitext(file_path)
-                    if file_extension == ".obj":
-                        self.openGLWidget.load_model(file_path)
-                        self.update_properties_dock(file_path)
-                    else:
-                        self.openGLWidget.load_point_cloud(file_path)
-                        self.update_properties_dock(file_path)
+                _, file_extension = os.path.splitext(file_path)
+                if file_extension == ".obj":
+                    self.openGLWidget.load_model(file_path)
+                    self.update_properties_dock(file_path)
                 else:
-                    print(f"Файл {file_path} не найден")
+                    self.openGLWidget.load_point_cloud(file_path)
+                    self.update_properties_dock(file_path)
+
             elif state == 0:  # Checkbox is unchecked
                 if file_path in self.openGLWidget.point_clouds:
-                    del self.openGLWidget.point_clouds[file_path]
+                    self.openGLWidget.point_clouds[file_path] = {'active': False, 'data': None}
                     self.openGLWidget.update()
                     self.clear_properties_dock()
                 elif file_path in self.openGLWidget.models:
-                    del self.openGLWidget.models[file_path]
+                    self.openGLWidget.models[file_path] = {'active': False, 'data': None}
                     self.openGLWidget.update()
                     self.clear_properties_dock()
 
@@ -361,7 +351,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 las.write(save_path)
                 print(f"Файл: {file_path} сохранён как: {save_path}")
             elif file_extension == ".pcd":
-                points = self.openGLWidget.point_clouds[file_path]['data']
+                points = self.openGLWidget.vbo_data[file_path][0]
                 # Создаем объект PointCloud
                 pcd = o3d.geometry.PointCloud()
                 # Устанавливаем точки в объект PointCloud
@@ -386,7 +376,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 elif original_ext == ".pcd":
                     # Сохраняем файл как .pcd
                     output_path = os.path.join(save_dir, file_name)
-                    points = self.openGLWidget.point_clouds[file_path]['data']
+                    points = self.openGLWidget.vbo_data[file_path][0]
                     # Создаем объект PointCloud
                     pcd = o3d.geometry.PointCloud()
                     # Устанавливаем точки в объект PointCloud
