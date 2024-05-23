@@ -434,7 +434,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             color_vbo = vbo.VBO(objects_colors.astype(np.float32))
             self.openGLWidget.vbo_data[segment_file_path] = (point_vbo, color_vbo, len(objects_points))
 
-            self.openGLWidget.load_model(segment_file_path)
+            self.openGLWidget.load_point_cloud(segment_file_path)
             self.add_file_to_list_widget(segment_file_path)
 
         print(f"Сегментация завершена, найдено {len(unique_labels)} компонентов")
