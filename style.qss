@@ -166,6 +166,12 @@ QPlainTextEdit{
     border: 2px solid #494950;
 }
 
+QLineEdit{
+    background-color: #494950;
+    color: #CCCEDB;
+    border:none;
+}
+
 QRadioButton{
     background-color: #494950;
     color: #CCCEDB;

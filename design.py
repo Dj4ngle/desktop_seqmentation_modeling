@@ -1,11 +1,12 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QDockWidget, QTextEdit, QListWidgetItem, QCheckBox, QRadioButton, QSlider, QSizePolicy,
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QDockWidget, QTextEdit, QListWidgetItem, QCheckBox, QRadioButton, QSlider, QSizePolicy, QLineEdit,
                              QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QToolBar, QMenu, QStatusBar, QListWidget, QPlainTextEdit, QButtonGroup )
 
 from modeler import modeler
 from modeler2 import modeler2
 from point_cloud_widget import OpenGLWidget
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QRegularExpression
+from PyQt6.QtGui import QRegularExpressionValidator
 from datetime import datetime, timedelta
 import os
         
@@ -35,6 +36,13 @@ class Ui_MainWindow(object):
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.files_dock_widget())
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.properties_dock_widget())
 
+    def update_list(self, list):
+        
+        list.clear()
+        for file_name in self.openGLWidget.point_clouds:
+            if self.openGLWidget.point_clouds[file_name]['active']:
+                list.addItem(file_name)
+            
     def init_dock_widgets(self):
         self.dock_widgets = {
             'ground_extraction': self.ground_extraction_dock_widget(),
@@ -100,10 +108,6 @@ class Ui_MainWindow(object):
             self.dock_widgets['ground_extraction'] = dock
         return self.dock_widgets['ground_extraction']
 
-    def update_clouds_list(self):
-        self.clouds_list_widget.clear()
-        for file_name in self.openGLWidget.point_clouds:
-            self.clouds_list_widget.addItem(file_name)
 
     def run_ground_extraction(self):
         selected_items = self.clouds_list_widget.selectedItems()
@@ -131,21 +135,46 @@ class Ui_MainWindow(object):
             self.add_file_to_list_widget(objects_cloud_path)
         
         self.clouds_list_widget.clear()
-
- 
     
     def segmentation_dock_widget(self):
-        dock = QDockWidget('Сегментация')
-        dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
-        widget = QWidget()
-        layout = QVBoxLayout()
-        label = QLabel(f"Наполнение сегментации")
-        button = QPushButton("ОК")
-        layout.addWidget(label)
-        layout.addWidget(button)
-        widget.setLayout(layout)
-        dock.setWidget(widget)
-        return dock
+        if 'segmentation' not in self.dock_widgets:
+            segmentation_dock = QDockWidget("Сегментация деревьев")
+            segmentation_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+            widget = QWidget()
+            layout = QVBoxLayout()
+            # Список для выбора облака точек
+            self.segmentation_list_widget = QListWidget()
+            layout.addWidget(self.segmentation_list_widget)
+
+            # Параметры для сегментации
+            params_layout = QVBoxLayout()
+            segmentation_eps_input = QLineEdit()
+            segmentation_min_samples_input = QLineEdit()
+
+            # Создаем валидатор для QLineEdit, который позволяет вводить только цифры и точку
+            regex = QRegularExpression(r"^[0-9]*\.?[0-9]*$")
+            validator = QRegularExpressionValidator(regex)
+            
+            segmentation_eps_input.setValidator(validator)
+            segmentation_min_samples_input.setValidator(validator)
+
+            params_layout.addWidget(QLabel("Epsilon (eps):"))
+            params_layout.addWidget(segmentation_eps_input)
+            params_layout.addWidget(QLabel("Min Samples:"))
+            params_layout.addWidget(segmentation_min_samples_input)
+            
+            layout.addLayout(params_layout)
+
+            # Кнопка запуска сегментации
+            segmentation_run_button = QPushButton("Сегментировать")
+            segmentation_run_button.clicked.connect(self.run_segmentation)
+            layout.addWidget(segmentation_run_button)
+
+            widget.setLayout(layout)
+            segmentation_dock.setWidget(widget)
+            self.dock_widgets['segmentation'] = segmentation_dock
+        return self.dock_widgets['segmentation']
+
     
     def taxation_dock_widget(self):
         dock = QDockWidget('Таксация')

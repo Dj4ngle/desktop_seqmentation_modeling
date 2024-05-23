@@ -56,10 +56,13 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.toolbarsCreator.earthExtractionAction.triggered.connect(lambda:
                                                                      self.toggle_dock_widget('ground_extraction',
                                                                         Qt.DockWidgetArea.LeftDockWidgetArea))
-        self.toolbarsCreator.earthExtractionAction.triggered.connect(self.update_clouds_list)
+        self.toolbarsCreator.earthExtractionAction.triggered.connect(lambda:
+                                                                     self.update_list(self.clouds_list_widget))
         self.toolbarsCreator.segmentationAction.triggered.connect(lambda:
                                                                      self.toggle_dock_widget('segmentation',
                                                                         Qt.DockWidgetArea.LeftDockWidgetArea))
+        self.toolbarsCreator.segmentationAction.triggered.connect(lambda:
+                                                                     self.update_list(self.segmentation_list_widget))
         self.toolbarsCreator.taxationAction.triggered.connect(lambda:
                                                                      self.toggle_dock_widget('taxation',
                                                                         Qt.DockWidgetArea.LeftDockWidgetArea))
@@ -88,70 +91,6 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
         self.init_dock_widgets()
 
-    def perform_ground_extraction(self, file_path):
-        if file_path in self.openGLWidget.point_clouds:
-            points = self.openGLWidget.point_clouds[file_path]['data']
-
-            original_pcd = o3d.geometry.PointCloud()
-            original_pcd.points = o3d.utility.Vector3dVector(points)
-            
-            # 0.3, 30, 0.1, 5
-            # Оценка нормалей
-            original_pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.3, max_nn=30))
-            normals = np.asarray(original_pcd.normals)
-            normal_threshold=0.1
-            height_offset=5
-
-            # Фильтрация нормалей и высоты
-            idx_normals = np.where((abs(normals[:, 1]) < normal_threshold))
-            idx_ground = np.where(points[:, 1] > np.min(points[:, 1]) + height_offset)
-            idx_wronglyfiltered = np.setdiff1d(idx_ground[0], idx_normals[0])
-            idx_retained = np.append(idx_normals[0], idx_wronglyfiltered)
-
-            # Оставшиеся точки
-            points_retained = points[idx_retained]
-
-            # Точки земли
-            idx_all = np.arange(points.shape[0])
-            idx_inv = np.setdiff1d(idx_all, idx_retained)
-            points_ground = points[idx_inv]
-
-            # Создание облаков точек
-            ground = o3d.geometry.PointCloud()
-            ground.points = o3d.utility.Vector3dVector(points_ground)
-
-            objects = o3d.geometry.PointCloud()
-            objects.points = o3d.utility.Vector3dVector(points_retained)
-
-
-            # Окрашивание точек земли
-            colors_ground = np.zeros(points_ground.shape)
-            colors_ground[:, 0] = 1
-            colors_ground[:, 1] = 0.2
-            colors_ground[:, 2] = 0.2
-            ground.colors = o3d.utility.Vector3dVector(colors_ground)
-
-            # Изменяем расширение файла и добавляем _ground и _objects
-            file_extension = os.path.splitext(file_path)[1]
-            ground_file_path = file_path.replace(file_extension, "_ground" + file_extension)
-            objects_file_path = file_path.replace(file_extension, "_objects" + file_extension)
-
-            # Добавляем результаты в виджет для визуализации
-            self.openGLWidget.point_clouds[ground_file_path] = {'active': True, 'data': ground}
-            ground_points = np.asarray(ground.points)
-            ground_colors = np.asarray(ground.colors)
-            point_vbo = vbo.VBO(ground_points.astype(np.float32))
-            color_vbo = vbo.VBO(ground_colors.astype(np.float32))
-            self.openGLWidget.vbo_data[ground_file_path] = (point_vbo, color_vbo, len(ground_points))
-
-            self.openGLWidget.point_clouds[objects_file_path] = {'active': True, 'data': objects}
-            objects_points = np.asarray(objects.points)
-            objects_colors = np.ones_like(points)  # Белый цвет по умолчанию
-            point_vbo = vbo.VBO(objects_points.astype(np.float32))
-            color_vbo = vbo.VBO(objects_colors.astype(np.float32))
-            self.openGLWidget.vbo_data[objects_file_path] = (point_vbo, color_vbo, len(objects_points))
-
-            self.openGLWidget.update()
 
     def select_files(self):
         # Метод для выбора файлов
@@ -386,3 +325,104 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
                 else:
                     print(f"Неподдерживаемый формат файла: {file_path}")
+
+    def perform_ground_extraction(self, file_path):
+        if file_path in self.openGLWidget.point_clouds:
+            points = self.openGLWidget.point_clouds[file_path]['data']
+
+            original_pcd = o3d.geometry.PointCloud()
+            original_pcd.points = o3d.utility.Vector3dVector(points)
+            
+            # 0.3, 30, 0.1, 5
+            # Оценка нормалей
+            original_pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.3, max_nn=30))
+            normals = np.asarray(original_pcd.normals)
+            normal_threshold=0.1
+            height_offset=5
+
+            # Фильтрация нормалей и высоты
+            idx_normals = np.where((abs(normals[:, 1]) < normal_threshold))
+            idx_ground = np.where(points[:, 1] > np.min(points[:, 1]) + height_offset)
+            idx_wronglyfiltered = np.setdiff1d(idx_ground[0], idx_normals[0])
+            idx_retained = np.append(idx_normals[0], idx_wronglyfiltered)
+
+            # Оставшиеся точки
+            points_retained = points[idx_retained]
+
+            # Точки земли
+            idx_all = np.arange(points.shape[0])
+            idx_inv = np.setdiff1d(idx_all, idx_retained)
+            points_ground = points[idx_inv]
+
+            # Создание облаков точек
+            ground = o3d.geometry.PointCloud()
+            ground.points = o3d.utility.Vector3dVector(points_ground)
+
+            objects = o3d.geometry.PointCloud()
+            objects.points = o3d.utility.Vector3dVector(points_retained)
+
+
+            # Окрашивание точек земли
+            colors_ground = np.zeros(points_ground.shape)
+            colors_ground[:, 0] = 1
+            colors_ground[:, 1] = 0.2
+            colors_ground[:, 2] = 0.2
+            ground.colors = o3d.utility.Vector3dVector(colors_ground)
+
+            # Изменяем расширение файла и добавляем _ground и _objects
+            file_extension = os.path.splitext(file_path)[1]
+            ground_file_path = file_path.replace(file_extension, "_ground" + file_extension)
+            objects_file_path = file_path.replace(file_extension, "_objects" + file_extension)
+
+            # Добавляем результаты в виджет для визуализации
+            self.openGLWidget.point_clouds[ground_file_path] = {'active': True, 'data': ground}
+            ground_points = np.asarray(ground.points)
+            ground_colors = np.asarray(ground.colors)
+            point_vbo = vbo.VBO(ground_points.astype(np.float32))
+            color_vbo = vbo.VBO(ground_colors.astype(np.float32))
+            self.openGLWidget.vbo_data[ground_file_path] = (point_vbo, color_vbo, len(ground_points))
+
+            self.openGLWidget.point_clouds[objects_file_path] = {'active': True, 'data': objects}
+            objects_points = np.asarray(objects.points)
+            objects_colors = np.ones_like(points)  # Белый цвет по умолчанию
+            point_vbo = vbo.VBO(objects_points.astype(np.float32))
+            color_vbo = vbo.VBO(objects_colors.astype(np.float32))
+            self.openGLWidget.vbo_data[objects_file_path] = (point_vbo, color_vbo, len(objects_points))
+
+            self.openGLWidget.update()
+            
+    def run_segmentation(self):
+        selected_items = self.segmentation_list_widget.selectedItems()
+        if not selected_items:
+            print("Не выбрано облако точек для сегментации")
+            return
+
+        file_path = selected_items[0].text()
+        eps = float(self.segmentation_eps_input.text())
+        min_samples = int(self.segmentation_min_samples_input.text())
+        print(f"Сегментация запускается с eps: {eps} и min_samples: {min_samples}")
+        
+        # Загрузка и сегментация облака точек
+        points = self.openGLWidget.point_clouds[file_path]['data']
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points)
+
+        db = DBSCAN(eps=eps, min_samples=min_samples).fit(points)
+        labels = db.labels_
+        
+        # Создание и добавление сегментированных облаков точек в список и в VBO
+        unique_labels = np.unique(labels)
+        for label in unique_labels:
+            if label == -1:
+                continue  # Пропустить шум
+            segment_points = points[labels == label]
+            segment_pcd = o3d.geometry.PointCloud()
+            segment_pcd.points = o3d.utility.Vector3dVector(segment_points)
+            segment_file_path = f"{file_path}_segment_{label}.pcd"
+            o3d.io.write_point_cloud(segment_file_path, segment_pcd)
+
+            # Добавление в список и в VBO
+            item = QListWidgetItem(segment_file_path, self.segmentation_list_widget)
+            self.load_point_cloud(segment_file_path)  # Предполагается, что есть метод загрузки в OpenGLWidget
+
+        print(f"Сегментация завершена, найдено {len(unique_labels)} компонентов")
