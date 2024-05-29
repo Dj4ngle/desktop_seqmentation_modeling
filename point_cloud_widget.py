@@ -103,15 +103,17 @@ class OpenGLWidget(QOpenGLWidget):
         max_model = 0
 
         if self.vbo_data:
-            for pcd in self.vbo_data.values():
-                points = pcd[0]
-                size = np.max(points, axis=0) - np.min(points, axis=0)
-                max_cloud = max(max_cloud, np.max(size))
+            for key, pcd in self.vbo_data.items():
+                if self.point_clouds[key]['active']:
+                    points = pcd[0]
+                    size = np.max(points, axis=0) - np.min(points, axis=0)
+                    max_cloud = max(max_cloud, np.max(size))
         if self.vbo_data_models:
-            for model in self.vbo_data_models.values():
-                points = model[0]
-                size = np.max(points, axis=0) - np.min(points, axis=0)
-                max_model = max(max_model, np.max(size))
+            for key, model in self.vbo_data_models.items():
+                if self.models[key]['active']:
+                    points = model[0]
+                    size = np.max(points, axis=0) - np.min(points, axis=0)
+                    max_model = max(max_model, np.max(size))
 
         max_size = max(max_cloud, max_model)
         scale_factor = 1.5 / max_size if max_size != 0 else 1
