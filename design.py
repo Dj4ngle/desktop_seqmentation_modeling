@@ -114,30 +114,12 @@ class Ui_MainWindow(object):
 
     def run_ground_extraction(self):
         selected_items = self.clouds_list_widget.selectedItems()
+        if not selected_items:
+            print("Не выбрано облако точек для удаления земли")
+            return
         if selected_items:
             file_path = selected_items[0].text()
             self.perform_ground_extraction(file_path)
-            
-            # Определяем расширение файла
-            file_extension = os.path.splitext(file_path)[1]
-            
-            # Формируем пути к облакам точек земли и объектов
-            ground_cloud_path = file_path.replace(file_extension, "_ground" + file_extension)
-            objects_cloud_path = file_path.replace(file_extension, "_objects" + file_extension)
-            
-            # Добавляем облако точек земли в list_widget
-            ground_item = QListWidgetItem(self.listWidget)
-            ground_checkbox = QCheckBox(ground_cloud_path)
-            ground_checkbox.setChecked(True)
-            ground_checkbox.setProperty("filePath", ground_cloud_path)
-            self.listWidget.setItemWidget(ground_item, ground_checkbox)
-            ground_item.setSizeHint(ground_checkbox.sizeHint())
-            ground_checkbox.stateChanged.connect(self.checkbox_changed)
-            
-            # Добавляем облако точек объектов в list_widget
-            self.add_file_to_list_widget(objects_cloud_path)
-        
-        self.clouds_list_widget.clear()
 
     def segmentation_dock_widget(self):
         if 'segmentation' not in self.dock_widgets:
@@ -191,9 +173,9 @@ class Ui_MainWindow(object):
             layout.addWidget(self.taxation_list_widget)
 
             # Флажки для выбора метрик
-            self.checkbox_dbh = QCheckBox("Ширина на уровне груди")
+            self.checkbox_dbh = QCheckBox("Диаметр на высоте груди")
             self.checkbox_height = QCheckBox("Высота")
-            self.checkbox_volume = QCheckBox("Volume")
+            self.checkbox_volume = QCheckBox("Ширина кроны")
 
             layout.addWidget(self.checkbox_dbh)
             layout.addWidget(self.checkbox_height)
@@ -229,6 +211,7 @@ class Ui_MainWindow(object):
             results.append(f"Ширина кроны: {self.calculate_crown_width(file_path)}")
             
         if results:
+            print("Результаты для облака точек:" + os.path.basename(file_path) + "\n" + "\n".join(results))
             self.results_label.setText("Результаты:\n" + "\n".join(results))
         else: self.results_label.setText("")
 

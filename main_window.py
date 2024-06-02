@@ -374,6 +374,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         file_extension = os.path.splitext(file_path)[1]
         ground_file_path = file_path.replace(file_extension, "_ground" + file_extension)
         objects_file_path = file_path.replace(file_extension, "_objects" + file_extension)
+        
+        print("Земля удалена. Исходное облако точек разделено на:\n" + ground_file_path + "\n" + objects_file_path)
 
         # Добавляем результаты в виджет для визуализации
         self.openGLWidget.point_clouds[ground_file_path] = {'active': True, 'data': ground}
@@ -382,6 +384,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         point_vbo = vbo.VBO(ground_points.astype(np.float32))
         color_vbo = vbo.VBO(ground_colors.astype(np.float32))
         self.openGLWidget.vbo_data[ground_file_path] = (point_vbo, color_vbo, len(ground_points))
+        self.openGLWidget.load_point_cloud(ground_file_path)
+        self.add_file_to_list_widget(ground_file_path)
 
         self.openGLWidget.point_clouds[objects_file_path] = {'active': True, 'data': objects}
         objects_points = np.asarray(objects.points)
@@ -389,6 +393,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         point_vbo = vbo.VBO(objects_points.astype(np.float32))
         color_vbo = vbo.VBO(objects_colors.astype(np.float32))
         self.openGLWidget.vbo_data[objects_file_path] = (point_vbo, color_vbo, len(objects_points))
+        self.openGLWidget.load_point_cloud(objects_file_path)
+        self.add_file_to_list_widget(objects_file_path)
 
         self.openGLWidget.update()
             
