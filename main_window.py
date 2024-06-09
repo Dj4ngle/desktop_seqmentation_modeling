@@ -9,6 +9,8 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon, QAction
 from PyQt6.QtWidgets import QMainWindow, QFileDialog, QListWidgetItem, QCheckBox, QApplication, QLabel
 import numpy as np
+
+from config import base_path
 from design import Ui_MainWindow
 from console_manager import ConsoleManager
 from menu_bar import MenuBar
@@ -25,7 +27,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.dock_widgets = {}
         self.current_dock = None
 
-        self.setWindowIcon(QIcon("images/Icon.png"))
+        self.setWindowIcon(QIcon(os.path.join(base_path,"images/Icon.png")))
 
         self.setupUi(self)
 
@@ -97,14 +99,13 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
     def select_files(self):
         # Метод для выбора файлов
         files, _ = QFileDialog.getOpenFileNames(self, "Выбрать файлы", "", "LAS and PCD files (*.las *.obj *.pcd)")
-
         if files:
             for file in files:
                 # Создание нового элемента QListWidgetItem
                 item = QListWidgetItem(self.listWidget)
 
                 # Создание чекбокса с именем файла
-                checkbox = QCheckBox(file)
+                checkbox = QCheckBox(os.path.basename(file))
                 checkbox.setChecked(False)
 
                 checkbox.setProperty("filePath", file)
