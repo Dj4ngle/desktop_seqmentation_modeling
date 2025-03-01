@@ -1,3 +1,5 @@
+import os
+
 from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtWidgets import (QHBoxLayout, QListWidget, QDockWidget,QListWidgetItem, QCheckBox, QVBoxLayout, QWidget, QPushButton)
 
@@ -88,7 +90,7 @@ class Ui_MainWindow(object):
     def add_file_to_list_widget(self, file_path):
         # Добавляем облако точек земли в list_widget
         ground_item = QListWidgetItem(self.listWidget)
-        ground_checkbox = QCheckBox(file_path)
+        ground_checkbox = QCheckBox(os.path.basename(file_path))
         ground_checkbox.setChecked(True)
         ground_checkbox.setProperty("filePath", file_path)
         self.listWidget.setItemWidget(ground_item, ground_checkbox)

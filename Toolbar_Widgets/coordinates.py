@@ -69,10 +69,21 @@ def run_coordinates(self):
 
     print(f"Запуск обнаружения координат с интенсивностью {intensity_cut_make} для {file_path}")
 
+    # Определяем абсолютный путь к текущему файлу
+    script_path = os.path.abspath(__file__)
+    # Определяем директорию, в которой находится этот файл
+    script_dir = os.path.dirname(script_path)
+    # Определяем родительскую директорию (папку, содержащую script_dir)
+    parent_dir = os.path.dirname(script_dir)
+
+    # Создаём путь к tmp внутри родительской директории
+    tmp_dir = os.path.join(parent_dir, "tmp")
+    os.makedirs(tmp_dir, exist_ok=True)
+
     # Загружаем настройки CS
     cs = coord_settings.CS()
     cs.fname_points = file_path
-    cs.path_base = os.path.dirname(file_path)
+    cs.path_base = tmp_dir
 
     created_files = coordinates.coordinates(intensity_cut_make, cs)
 

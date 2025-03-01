@@ -19,8 +19,16 @@ def makedirs_if_not_exist(path):
         os.makedirs(path)
 
 def coordinates(intensity_cut_make, cs):
-    fname_data_cut = cs.fname_points.partition('.')[0] + "_cut_int" + str(cs.intensity_cut) + ".pcd"                      # Имя создаваемого файла с обрезанными данными облака по высоте и границам участка (.pcd)
-    csv_name_coord = cs.fname_points.partition('.')[0] + "_Coordinates_int" + str(intensity_cut_make) + ".csv"         # Имя создаваемого файла в папке path_base/cells/stumps/ (.csv)
+    # Извлекаем только имя файла
+    file_name = os.path.basename(cs.fname_points)
+    print(f"cs.path_base =  {cs.path_base}")
+
+    # Имя создаваемого файла с обрезанными данными облака по высоте и границам участка (.pcd)
+    fname_data_cut = os.path.join(cs.path_base, file_name.partition('.')[0] + "_cut_int" + str(cs.intensity_cut) + ".pcd")
+    print(f"fname_data_cut =  {fname_data_cut}")
+    # Имя создаваемого файла в папке path_base/cells/stumps/ (.csv)
+    csv_name_coord = os.path.join(cs.path_base, file_name.partition('.')[0] + "_Coordinates_int" + str(intensity_cut_make) + ".csv")
+    print(f"csv_name_coord =  {csv_name_coord}")
 
     file_name_traj = os.path.join(cs.path_base, cs.fname_traj)
     file_name_data = os.path.join(cs.path_base, cs.fname_points) 

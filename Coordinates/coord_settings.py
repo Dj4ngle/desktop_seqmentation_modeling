@@ -10,7 +10,7 @@ class CS():
                  height_limit_1=1.25, height_limit_2=1.35,
                  eps_XY=0.08, eps_Z=0.7,
                  path_base=None,  # Всегда нужно задавать самому
-                 fname_points="01_04_05_oct9.las",
+                 fname_points=None,  # Всегда нужно задавать самому
                  fname_traj="traj.las",
                  fname_shape="Polyline.shp"):
         self.FLAG_cut_data = FLAG_cut_data

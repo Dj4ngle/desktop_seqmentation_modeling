@@ -122,7 +122,7 @@ def start_modeling(self, slider1, slider2, slider3):
         path = modeler(file, new_file_path, slider1, slider2, slider3)
         if path:
             self.openGLWidget.load_model(path)
-            self.add_file_to_list_widget(self, path)
+            self.add_file_to_list_widget(path)
 
 
 
@@ -141,7 +141,7 @@ def start_modeling2(self, slider1, slider2, slider3):
         path = modeler2(file, new_file_path, slider1, slider2, slider3)
         if path:
             self.openGLWidget.load_model(path)
-            self.add_file_to_list_widget(self, path)
+            self.add_file_to_list_widget(path)
 
 def on_method_radio_button_clicked(self, button):
     if button == self.bpa_radio:
