@@ -1,14 +1,10 @@
 import os
-import numpy as np
-import pandas as pd
-from OpenGL.arrays import vbo
-import open3d as o3d
 
 from PyQt6.QtWidgets import (QDockWidget, QVBoxLayout, QWidget, QPushButton, QLabel, QListWidget, QLineEdit)
 from PyQt6.QtCore import Qt, QRegularExpression
 from PyQt6.QtGui import QRegularExpressionValidator
 
-from Coordinates import coordinates, coord_settings
+from Coordinates import coordinates, coord_settings, merge_coordinates, clear_excess_stumps
 
 
 def coordinates_dock_widget(self):
@@ -18,10 +14,6 @@ def coordinates_dock_widget(self):
         dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
         widget = QWidget()
         layout = QVBoxLayout()
-
-        # Список облаков точек
-        self.coordinates_list_widget = QListWidget()
-        layout.addWidget(self.coordinates_list_widget)
 
         # Поле ввода для intensity_cut_make
         self.intensity_cut_input = QLineEdit()
@@ -59,37 +51,48 @@ def run_coordinates(self):
         print("Ошибка: Не выбрано облако точек для обнаружения координат.")
         return
 
-    file_path = selected_files[0]
+    for file_path in selected_files:
+        if not self.intensity_cut_input.text():
+            print("Ошибка: Не указана интенсивность обрезки точек.")
+            return
 
-    if not self.intensity_cut_input.text():
-        print("Ошибка: Не указана интенсивность обрезки точек.")
-        return
+        intensity_cut_make = int(self.intensity_cut_input.text())
 
-    intensity_cut_make = int(self.intensity_cut_input.text())
+        print(f"Запуск обнаружения координат с интенсивностью {intensity_cut_make} для {file_path}")
 
-    print(f"Запуск обнаружения координат с интенсивностью {intensity_cut_make} для {file_path}")
+        # Определяем абсолютный путь к текущему файлу
+        script_path = os.path.abspath(__file__)
+        # Определяем директорию, в которой находится этот файл
+        script_dir = os.path.dirname(script_path)
+        # Определяем родительскую директорию (папку, содержащую script_dir)
+        parent_dir = os.path.dirname(script_dir)
 
-    # Определяем абсолютный путь к текущему файлу
-    script_path = os.path.abspath(__file__)
-    # Определяем директорию, в которой находится этот файл
-    script_dir = os.path.dirname(script_path)
-    # Определяем родительскую директорию (папку, содержащую script_dir)
-    parent_dir = os.path.dirname(script_dir)
+        # Создаём путь к tmp внутри родительской директории
+        tmp_dir = os.path.join(parent_dir, "tmp")
+        os.makedirs(tmp_dir, exist_ok=True)
 
-    # Создаём путь к tmp внутри родительской директории
-    tmp_dir = os.path.join(parent_dir, "tmp")
-    os.makedirs(tmp_dir, exist_ok=True)
+        # Загружаем настройки CS
+        cs = coord_settings.CS()
+        cs.fname_points = file_path
+        cs.path_base = tmp_dir
 
-    # Загружаем настройки CS
-    cs = coord_settings.CS()
-    cs.fname_points = file_path
-    cs.path_base = tmp_dir
+        files_to_show = []
+        created_files = coordinates.coordinates(intensity_cut_make, cs)
+        files_to_show.extend(created_files)
+        # Также делаем прогон с интенсивностью 5000 и 1000
+        created_files = coordinates.coordinates(5000, cs)
+        files_to_show.extend(created_files)
+        created_files = coordinates.coordinates(1000, cs)
+        files_to_show.extend(created_files)
 
-    created_files = coordinates.coordinates(intensity_cut_make, cs)
+        merge_coordinates.merge_coordinates(cs)
+        csv_output_file = clear_excess_stumps.clear_excess_stumps(cs)
+        self.openGLWidget.load_point_cloud(csv_output_file)
+        self.add_file_to_list_widget(csv_output_file)
 
-    # Загружаем файлы в OpenGL и добавляем в ListWidget
-    for file_path in created_files:
-        self.openGLWidget.load_point_cloud(file_path)
-        self.add_file_to_list_widget(file_path)
+        # Загружаем файлы в OpenGL и добавляем в ListWidget
+        for file_path in files_to_show:
+            self.openGLWidget.load_point_cloud(file_path)
+            self.add_file_to_list_widget(file_path)
 
     print("Обнаружение координат завершено.")

@@ -21,14 +21,11 @@ def makedirs_if_not_exist(path):
 def coordinates(intensity_cut_make, cs):
     # Извлекаем только имя файла
     file_name = os.path.basename(cs.fname_points)
-    print(f"cs.path_base =  {cs.path_base}")
 
     # Имя создаваемого файла с обрезанными данными облака по высоте и границам участка (.pcd)
     fname_data_cut = os.path.join(cs.path_base, file_name.partition('.')[0] + "_cut_int" + str(cs.intensity_cut) + ".pcd")
-    print(f"fname_data_cut =  {fname_data_cut}")
     # Имя создаваемого файла в папке path_base/cells/stumps/ (.csv)
     csv_name_coord = os.path.join(cs.path_base, file_name.partition('.')[0] + "_Coordinates_int" + str(intensity_cut_make) + ".csv")
-    print(f"csv_name_coord =  {csv_name_coord}")
 
     file_name_traj = os.path.join(cs.path_base, cs.fname_traj)
     file_name_data = os.path.join(cs.path_base, cs.fname_points) 
@@ -295,10 +292,3 @@ def coordinates(intensity_cut_make, cs):
 
         # Возвращаем список всех созданных PCD-файлов
         return created_pcd_files
-
-if __name__ == "__main__" :
-    cs = CS()
-    yml_path = "settings\settings.yaml"
-    cs.set(yml_path)
-    intensity_cut_make = 7000
-    coordinates(intensity_cut_make = intensity_cut_make, cs = cs)
