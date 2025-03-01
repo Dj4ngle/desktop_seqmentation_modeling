@@ -1,5 +1,6 @@
 import os
 import open3d as o3d
+import pandas as pd
 from OpenGL.GL import glDeleteBuffers
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
@@ -201,9 +202,12 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 if file_extension == ".obj":
                     self.openGLWidget.load_model(file_path)
                     self.update_properties_dock(file_path)
-                else:
+                elif file_extension == ".las" or file_extension == ".pcd":
                     self.openGLWidget.load_point_cloud(file_path)
                     self.update_properties_dock(file_path)
+                else:
+                    # Работа с форматом csv
+                    pass
 
             elif state == 0:  # Checkbox is unchecked
                 if file_path in self.openGLWidget.point_clouds:
@@ -276,7 +280,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
     def save_single_file(self, file_path):
         save_path, _ = QFileDialog.getSaveFileName(self, "Сохранить выбранный файл", "",
-                                                   "LAS Files (*.las);;PCD Files (*.pcd)")
+                                                   "LAS Files (*.las);;PCD Files (*.pcd);;CSV Files (*.csv)")
         if save_path:
             # Определяем расширение файла
             file_extension = os.path.splitext(save_path)[1]
@@ -293,6 +297,15 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 pcd.points = o3d.utility.Vector3dVector(points)
                 o3d.io.write_point_cloud(save_path, pcd)
                 print(f"Файл: {file_path} сохранён как: {save_path}")
+
+            elif file_extension == ".csv":
+                # Сохраняем файл как .csv
+                df = pd.read_csv(file_path)
+                df.to_csv(save_path, index=False, sep=";")
+                print(f"Файл: {file_path} сохранён как: {save_path}")
+
+            else:
+                print(f"Неподдерживаемый формат файла: {file_path}")
 
     def save_multiple_files(self, file_paths):
         save_dir = QFileDialog.getExistingDirectory(self, "Выбрать папку для сохранения файлов")
@@ -317,6 +330,13 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                     # Устанавливаем точки в объект PointCloud
                     pcd.points = o3d.utility.Vector3dVector(points)
                     o3d.io.write_point_cloud(output_path, pcd)
+                    print(f"Файл: {file_path} сохранён как: {output_path}")
+
+                elif original_ext == ".csv":
+                    # Сохраняем файл как .csv
+                    output_path = os.path.join(save_dir, file_name)
+                    df = pd.read_csv(file_path)
+                    df.to_csv(output_path, index=False, sep=";")
                     print(f"Файл: {file_path} сохранён как: {output_path}")
 
                 else:
