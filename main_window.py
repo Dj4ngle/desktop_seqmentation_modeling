@@ -89,7 +89,6 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
         self.init_dock_widgets()
 
-
     def select_files(self):
         # Метод для выбора файлов
         files, _ = QFileDialog.getOpenFileNames(self, "Выбрать файлы", "", "LAS and PCD files (*.las *.obj *.pcd)")

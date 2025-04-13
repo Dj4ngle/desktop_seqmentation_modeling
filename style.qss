@@ -176,3 +176,17 @@ QRadioButton{
     background-color: #494950;
     color: #CCCEDB;
 }
+
+QComboBox {
+    background-color: #494950;
+    color: #CCCEDB;
+    border:none;
+}
+QComboBox QAbstractItemView {
+    background-color: #494950;   /* Цвет фона элементов */
+    color: #CCCEDB;              /* Цвет текста элементов */
+}
+QComboBox QAbstractItemView::item:selected {
+    background-color: #52525a;   /* Цвет фона выбранного элемента */
+    color: #CCCEDB;
+}

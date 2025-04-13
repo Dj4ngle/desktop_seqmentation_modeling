@@ -1,10 +1,11 @@
 import os
 
-from PyQt6.QtWidgets import (QDockWidget, QVBoxLayout, QWidget, QPushButton, QLabel, QListWidget, QLineEdit)
+from PyQt6.QtWidgets import (QDockWidget, QVBoxLayout, QWidget, QPushButton, QLabel, QComboBox, QLineEdit)
 from PyQt6.QtCore import Qt, QRegularExpression
 from PyQt6.QtGui import QRegularExpressionValidator
 
 from Coordinates import coordinates, coord_settings, merge_coordinates, clear_excess_stumps
+from Segmentation import seg_settings, segmentation_vor
 
 
 def coordinates_dock_widget(self):
@@ -14,6 +15,12 @@ def coordinates_dock_widget(self):
         dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
         widget = QWidget()
         layout = QVBoxLayout()
+
+        # Выпадающий список
+        self.intensity_selection = QComboBox()
+        self.intensity_selection.addItems(["-1", "0", "1"])  # Добавляем элементы в выпадающий список
+        layout.addWidget(QLabel("Порог:"))
+        layout.addWidget(self.intensity_selection)
 
         # Поля ввода для intensity_cut_make
         self.intensity_inputs = []
@@ -85,10 +92,24 @@ def run_coordinates(self):
             print(f"Запуск обнаружения координат с интенсивностью {intensity_cut_make} для {file_path}")
             coordinates.coordinates(intensity_cut_make, cs)
 
+        # мерджим координаты
         merge_coordinates.merge_coordinates(cs)
         csv_output_file = clear_excess_stumps.clear_excess_stumps(cs)
         self.openGLWidget.load_point_cloud(csv_output_file)
         self.add_file_to_list_widget(csv_output_file)
+
+        # Загружаем настройки SS
+        ss = seg_settings.SS()
+        ss.fname_points = file_path
+        ss.path_base = tmp_dir
+        ss.csv_name_coord = csv_output_file
+
+        # проводим сегментацию
+        tr_val = int(self.intensity_selection.currentText())
+        segmented_files = segmentation_vor.segmentation_vor(ss, tr_val, make_binding = True)
+        for file in segmented_files:
+            self.openGLWidget.load_point_cloud(file)
+            self.add_file_to_list_widget(file)
 
 
     print("Обнаружение координат завершено.")

@@ -13,10 +13,10 @@ import math
 from tqdm import tqdm
 
 
-
 def makedirs_if_not_exist(path):
     if not os.path.exists(path):
         os.makedirs(path)
+
 
 def coordinates(intensity_cut_make, cs):
     # Извлекаем только имя файла
