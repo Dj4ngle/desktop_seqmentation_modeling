@@ -15,18 +15,23 @@ def coordinates_dock_widget(self):
         widget = QWidget()
         layout = QVBoxLayout()
 
-        # Поле ввода для intensity_cut_make
-        self.intensity_cut_input = QLineEdit()
-        self.intensity_cut_input.setPlaceholderText("Введите интенсивность (напр. 7000)")
-        self.intensity_cut_input.setText("7000")  # Устанавливаем значение по умолчанию
+        # Поля ввода для intensity_cut_make
+        self.intensity_inputs = []
+        default_values = ["7000", "5000", "1000"]
 
-        # Валидатор для чисел
-        regex = QRegularExpression(r"^\d+$")  # Только цифры
-        validator = QRegularExpressionValidator(regex)
-        self.intensity_cut_input.setValidator(validator)
+        for val in default_values:
+            input_field = QLineEdit()
+            input_field.setPlaceholderText("Введите интенсивность (например, 7000)")
+            input_field.setText(val)
 
-        layout.addWidget(QLabel("Интенсивность обрезки точек:"))
-        layout.addWidget(self.intensity_cut_input)
+            regex = QRegularExpression(r"^\d+$")
+            validator = QRegularExpressionValidator(regex)
+            input_field.setValidator(validator)
+
+            layout.addWidget(QLabel(f"Интенсивность:"))
+            layout.addWidget(input_field)
+
+            self.intensity_inputs.append(input_field)
 
         # Кнопка запуска
         run_button = QPushButton("Обнаружить координаты")
@@ -52,13 +57,9 @@ def run_coordinates(self):
         return
 
     for file_path in selected_files:
-        if not self.intensity_cut_input.text():
+        if not self.intensity_inputs:
             print("Ошибка: Не указана интенсивность обрезки точек.")
             return
-
-        intensity_cut_make = int(self.intensity_cut_input.text())
-
-        print(f"Запуск обнаружения координат с интенсивностью {intensity_cut_make} для {file_path}")
 
         # Определяем абсолютный путь к текущему файлу
         script_path = os.path.abspath(__file__)
@@ -76,11 +77,13 @@ def run_coordinates(self):
         cs.fname_points = file_path
         cs.path_base = tmp_dir
 
-        coordinates.coordinates(intensity_cut_make, cs)
-        # Также делаем прогон с интенсивностью 5000 и 1000
-        coordinates.coordinates(5000, cs)
-        coordinates.coordinates(1000, cs)
-
+        for input_field in self.intensity_inputs:
+            if not input_field.text():
+                print("Ошибка: одно из полей интенсивности не заполнено.")
+                return
+            intensity_cut_make = int(input_field.text())
+            print(f"Запуск обнаружения координат с интенсивностью {intensity_cut_make} для {file_path}")
+            coordinates.coordinates(intensity_cut_make, cs)
 
         merge_coordinates.merge_coordinates(cs)
         csv_output_file = clear_excess_stumps.clear_excess_stumps(cs)

@@ -20,3 +20,4 @@ venv-bak/
 .DS_Store
 
 .idea/
+tmp/
