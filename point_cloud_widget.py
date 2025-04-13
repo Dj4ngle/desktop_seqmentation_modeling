@@ -49,6 +49,8 @@ class OpenGLWidget(QOpenGLWidget):
             pcd = o3d.io.read_point_cloud(filename)
             points = np.asarray(pcd.points)
             colors = np.ones_like(points)  # Белый цвет по умолчанию
+        elif file_extension == '.csv':
+            return
         else:
             print("Unsupported file format")
             return

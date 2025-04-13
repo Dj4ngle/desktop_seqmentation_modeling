@@ -23,14 +23,16 @@ def coordinates(intensity_cut_make, cs):
     file_name = os.path.basename(cs.fname_points)
 
     # Имя создаваемого файла с обрезанными данными облака по высоте и границам участка (.pcd)
-    fname_data_cut = os.path.join(cs.path_base, file_name.partition('.')[0] + "_cut_int" + str(cs.intensity_cut) + ".pcd")
+    fname_data_cut = os.path.join(cs.path_base,
+                                  file_name.partition('.')[0] + "_cut_int" + str(cs.intensity_cut) + ".pcd")
     # Имя создаваемого файла в папке path_base/cells/stumps/ (.csv)
-    csv_name_coord = os.path.join(cs.path_base, file_name.partition('.')[0] + "_Coordinates_int" + str(intensity_cut_make) + ".csv")
+    csv_name_coord = os.path.join(cs.path_base,
+                                  file_name.partition('.')[0] + "_Coordinates_int" + str(intensity_cut_make) + ".csv")
 
     file_name_traj = os.path.join(cs.path_base, cs.fname_traj)
-    file_name_data = os.path.join(cs.path_base, cs.fname_points) 
-    file_shape = os.path.join(cs.path_base, cs.fname_shape) 
-    file_name_data_cut = os.path.join(cs.path_base, fname_data_cut) 
+    file_name_data = os.path.join(cs.path_base, cs.fname_points)
+    file_shape = os.path.join(cs.path_base, cs.fname_shape)
+    file_name_data_cut = os.path.join(cs.path_base, fname_data_cut)
     file_name_csv = os.path.join(cs.path_base, csv_name_coord)
 
     if (cs.FLAG_cut_data or cs.FLAG_make_cells) and (cs.cut_data_method == 'flood_fill'):
@@ -42,41 +44,34 @@ def coordinates(intensity_cut_make, cs):
 
     if cs.FLAG_cut_data:
         pc_area = PCD_AREA()
-        pc_area.open(file_name_data, verbose = True)
+        pc_area.open(file_name_data, verbose=True)
         pc_area.points = PCD_UTILS.shift(pc_area.points, cs.x_shift, cs.y_shift, cs.z_shift)
 
-        # Определяем LOW и UP перед обрезкой данных
-        pc_area.auto_set_z_bounds(cs)
-        
         try:
             shp_poly = PCD_UTILS.shp_open(file_shape)
             shp_poly = PCD_UTILS.shift(shp_poly, cs.x_shift, cs.y_shift, cs.z_shift)
         except:
-            print("Warning: File of area boundary not found. The boundaries of the area are selected as the entire loaded area.")
+            print(
+                "Warning: File of area boundary not found. The boundaries of the area are selected as the entire loaded area.")
             FlagShape = False
             shp_poly = PCD_UTILS.shp_create(pc_area)
-            
 
         print('Starting cutting main pcd ...')
 
-        idx_labels=np.where((pc_area.points[:,2]>cs.LOW)&(pc_area.points[:,2]<=cs.UP))
+        print(f"Точек ДО фильтрации по интенсивности: {pc_area.points.shape}")
+        print(f"Минимальная интенсивность: {pc_area.intensity.min()}, Максимальная: {pc_area.intensity.max()}")
+        print(f"Порог отсечения intensity_cut_make: {intensity_cut_make}")
+
+        idx_labels = np.where((pc_area.points[:, 2] > cs.LOW) & (pc_area.points[:, 2] <= cs.UP))
         pc_area.index_cut(idx_labels)
 
-        idx_labels = np.where(pc_area.intensity>=cs.intensity_cut)
+        idx_labels = np.where(pc_area.intensity >= cs.intensity_cut)
         pc_area.index_cut(idx_labels)
-
-        print(f"Количество точек ПОСЛЕ index_cut: {pc_area.points.shape}")
 
         if FlagShape:
             pc_area = pc_area.poly_cut(shp_poly)
 
-        print(f"Количество точек перед сохранением: {pc_area.points.shape}")
-        if pc_area.points.shape[0] == 0:
-            print(f"Ошибка: После фильтрации облако {file_name_data_cut} пустое!")
-
-        print(f"Количество точек перед сохранением: {pc_area.points.shape}")
         pc_area.save(file_name_data_cut)
-        print(f"Количество точек после сохранения: {pc_area.points.shape}")
 
     path_int = os.path.join(cs.path_base, 'int' + str(intensity_cut_make))
     makedirs_if_not_exist(path_int)
@@ -85,70 +80,57 @@ def coordinates(intensity_cut_make, cs):
     makedirs_if_not_exist(path_file_cells)
 
     if cs.FLAG_make_cells:
+
+        print(f"Точек ДО фильтрации по интенсивности: {pc_area.points.shape}")
+        print(f"Минимальная интенсивность: {pc_area.intensity.min()}, Максимальная: {pc_area.intensity.max()}")
+        print(f"Порог отсечения intensity_cut_make: {intensity_cut_make}")
+
         if not cs.FLAG_cut_data:
-            print("IN not cs.FLAG_cut_data")
             pc_area = PCD_AREA()
             pc_area.open(file_name_data_cut)
-            idx_labels = np.where(pc_area.intensity>=intensity_cut_make)
+            idx_labels = np.where(pc_area.intensity >= intensity_cut_make)
             pc_area.index_cut(idx_labels)
             pc_area.points = PCD_UTILS.shift(pc_area.points, cs.x_shift, cs.y_shift, cs.z_shift)
-
-            # Определяем LOW и UP перед обрезкой данных
-            pc_area.auto_set_z_bounds(cs)
-
             try:
                 shp_poly = PCD_UTILS.shp_open(file_shape)
                 shp_poly = PCD_UTILS.shift(shp_poly, cs.x_shift, cs.y_shift, cs.z_shift)
             except:
                 shp_poly = PCD_UTILS.shp_create(pc_area)
-        
+
         if cs.FLAG_cut_data:
-            print(f"Точек ДО фильтрации по интенсивности: {pc_area.points.shape}")
-            print(f"Минимальная интенсивность: {pc_area.intensity.min()}, Максимальная: {pc_area.intensity.max()}")
-            print(f"Порог отсечения intensity_cut_make: {intensity_cut_make}")
-
             idx_labels = np.where(pc_area.intensity >= intensity_cut_make)
-            print(f"Выбрано точек для сохранения: {len(idx_labels[0])}")  # Сколько точек остаётся
-
             pc_area.index_cut(idx_labels)
-            print(f"Точек ПОСЛЕ фильтрации по интенсивности: {pc_area.points.shape}")
 
         print('Starting extracting areas (cells) traj-based ...')
 
-        print(f"Точек перед кластеризацией: {pc_area.points.shape}")
-        print(f"Интенсивность перед кластеризацией: {pc_area.intensity.shape}")
-
         if cs.cut_data_method == 'voronoi_tessellation':
-            if pc_area.points.shape[0] == 0:
-                print("⚠️ Ошибка: Перед кластеризацией нет точек! Пропускаем VOR_TES.")
-                return  # Остановить выполнение, если данных нет
-
-            vortes = VOR_TES(points = pc_area.points, intensity = pc_area.intensity, algo = cs.algo, n_clusters = cs.n_clusters, intensity_cut = cs.intensity_cut_vor_tes)
-            vortes.select_borders(path_file_cells, shp_poly, verbose = False)
+            vortes = VOR_TES(points=pc_area.points, intensity=pc_area.intensity, algo=cs.algo, n_clusters=cs.n_clusters,
+                             intensity_cut=cs.intensity_cut_vor_tes)
+            vortes.select_borders(path_file_cells, shp_poly, verbose=False)
             vortes.select_clusters(path_file_cells)
-        
+
         elif cs.cut_data_method == 'flood_fill':
-            cell = CELL(points = pc_area.points, intensity = pc_area.intensity, points_traj = pc_traj.points, cell_size = cs.cell_size)
-            cell.make_cell_list(pc_area.points.min(axis=0), pc_area.points.max(axis=0), verbose = True)
-            cell.save_all_cells(path_file_cells, verbose = True)
+            cell = CELL(points=pc_area.points, intensity=pc_area.intensity, points_traj=pc_traj.points,
+                        cell_size=cs.cell_size)
+            cell.make_cell_list(pc_area.points.min(axis=0), pc_area.points.max(axis=0), verbose=True)
+            cell.save_all_cells(path_file_cells, verbose=True)
 
         elif cs.cut_data_method == 'none':
             path_file_stumps = os.path.join(cs.path_base, 'stumps')
             makedirs_if_not_exist(path_file_stumps)
 
         else:
-            raise Exception("There is no such algorithm. Choose from existing: 'voronoi_tessellation', 'flood_fill', 'none'")
-        
+            raise Exception(
+                "There is no such algorithm. Choose from existing: 'voronoi_tessellation', 'flood_fill', 'none'")
+
         print(f'\n {cs.n_clusters} areas (cells) have been saved to the folder {path_file_cells}')
 
     if cs.FLAG_make_stumps:
-        
+
         TD = []
         TN = []
-        TCX =[]
-        TCY =[]
-
-        created_pcd_files = []  # Список для хранения всех созданных PCD файлов
+        TCX = []
+        TCY = []
 
         path_file_stumps = os.path.join(path_file_cells, 'stumps')
         makedirs_if_not_exist(path_file_stumps)
@@ -170,125 +152,129 @@ def coordinates(intensity_cut_make, cs):
                 labels_stumps = pc_cells.extract_stumps_labels()
 
                 for i in tqdm(np.unique(labels_stumps)):
-                    if i>-1:
+                    if i > -1:
                         pc_stump = CELL(pc_cells.points, pc_cells.intensity)
-                        idx_label=np.where(labels_stumps==i)
+                        idx_label = np.where(labels_stumps == i)
                         pc_stump.index_cut(idx_label)
-                        
-                        height = pc_stump.points.max(axis=0)[2]-pc_stump.points.min(axis=0)[2]
-                        if height>=cs.height_limit_1:
+
+                        height = pc_stump.points.max(axis=0)[2] - pc_stump.points.min(axis=0)[2]
+                        if height >= cs.height_limit_1:
 
                             # filename_stumps_out = 'int' + str(intensity_cut_make) + '_' + str(tfni).rjust(4, '0') + '.pcd'
-                            # fname_stumps_out = os.path.join(path_file_stumps, 'before_sor', filename_stumps_out) 
+                            # fname_stumps_out = os.path.join(path_file_stumps, 'before_sor', filename_stumps_out)
                             # pc_stump.save(fname_stumps_out)
 
                             pc_stump.points, pc_stump.intensity = PCD_UTILS.SOR(pc_stump.points, pc_stump.intensity)
 
                             # filename_stumps_out = 'int' + str(intensity_cut_make) + '_' + str(tfni).rjust(4, '0') + '.pcd'
-                            # fname_stumps_out = os.path.join(path_file_stumps, 'after_sor', filename_stumps_out) 
+                            # fname_stumps_out = os.path.join(path_file_stumps, 'after_sor', filename_stumps_out)
                             # pc_stump.save(fname_stumps_out)
-                            
-                            labels_XY = pc_stump.labels_XY_dbscan(eps = cs.eps_XY)
+
+                            labels_XY = pc_stump.labels_XY_dbscan(eps=cs.eps_XY)
 
                             for j in np.unique(labels_XY):
-                                if j>-1:
+                                if j > -1:
                                     pc_stump_clear = CELL(pc_stump.points, pc_stump.intensity)
-                                    idx_label=np.where(labels_XY==j)
+                                    idx_label = np.where(labels_XY == j)
                                     pc_stump_clear.index_cut(idx_label)
 
-                                    height = pc_stump_clear.points.max(axis=0)[2]-pc_stump_clear.points.min(axis=0)[2]
-                                    if height>=cs.height_limit_2:
-                                        labels_Z = pc_stump_clear.label_Z_dbscan(eps = cs.eps_Z)
+                                    height = pc_stump_clear.points.max(axis=0)[2] - pc_stump_clear.points.min(axis=0)[2]
+                                    if height >= cs.height_limit_2:
+                                        labels_Z = pc_stump_clear.label_Z_dbscan(eps=cs.eps_Z)
 
                                         max_shape = 0
                                         i_max_shape = -1
                                         for k in np.unique(labels_Z):
-                                            if k>=-1:
-                                                pc_stump_verifiable = PCD(pc_stump_clear.points, pc_stump_clear.intensity)
-                                                idx_label=np.where(labels_Z==k)
+                                            if k >= -1:
+                                                pc_stump_verifiable = PCD(pc_stump_clear.points,
+                                                                          pc_stump_clear.intensity)
+                                                idx_label = np.where(labels_Z == k)
                                                 pc_stump_verifiable.index_cut(idx_label)
-                                                if pc_stump_verifiable.points.shape[0]>max_shape:
+                                                if pc_stump_verifiable.points.shape[0] > max_shape:
                                                     max_shape = pc_stump_verifiable.points.shape[0]
                                                     i_max_shape = k
 
-                                        if i_max_shape!=-1:
+                                        if i_max_shape != -1:
                                             pc_stump_suitable = PCD(pc_stump_clear.points, pc_stump_clear.intensity)
-                                            idx_label=np.where(labels_Z==i_max_shape)
+                                            idx_label = np.where(labels_Z == i_max_shape)
                                             pc_stump_suitable.index_cut(idx_label)
-                                            
+
                                             r_list = []
                                             xy_list = []
-                                            save_center = [0,0,0]
+                                            save_center = [0, 0, 0]
 
                                             x_min, y_min, z_min = pc_stump_suitable.points.min(axis=0)
                                             x_max, y_max, z_max = pc_stump_suitable.points.max(axis=0)
-                                            if z_max-z_min>1:
+                                            if z_max - z_min > 1:
 
                                                 num_layers = 4
-                                                layer = (z_max-z_min)/num_layers
+                                                layer = (z_max - z_min) / num_layers
 
                                                 for l in range(num_layers):
-                                                    pc_stump_suitable_layer = PCD(pc_stump_suitable.points, pc_stump_suitable.intensity)
-                                                    idx_layer = np.where((pc_stump_suitable_layer.points[:,2]>=l*layer+z_min)&(pc_stump_suitable_layer.points[:,2]<(l+1)*layer+z_min))
+                                                    pc_stump_suitable_layer = PCD(pc_stump_suitable.points,
+                                                                                  pc_stump_suitable.intensity)
+                                                    idx_layer = np.where(
+                                                        (pc_stump_suitable_layer.points[:, 2] >= l * layer + z_min) & (
+                                                                    pc_stump_suitable_layer.points[:, 2] < (
+                                                                        l + 1) * layer + z_min))
                                                     pc_stump_suitable_layer.index_cut(idx_layer)
 
                                                     try:
-                                                        xc,yc,r,_ = cf.hyper_fit(pc_stump_suitable_layer.points)
+                                                        xc, yc, r, _ = cf.hyper_fit(pc_stump_suitable_layer.points)
                                                     except:
-                                                        xc,yc,r,_ = 0,0,0,0
+                                                        xc, yc, r, _ = 0, 0, 0, 0
                                                     r_list.append(r)
-                                                    xy_list.append([xc,yc])
-                                                                                        
-                                                xy_list=np.asarray(xy_list)
-                                                
+                                                    xy_list.append([xc, yc])
+
+                                                xy_list = np.asarray(xy_list)
+
                                                 r_median = statistics.median(r_list)
-                                                x_median = statistics.median(xy_list[:,0])
-                                                y_median = statistics.median(xy_list[:,1])
-                                                check_x = np.median(pc_stump_suitable.points[:,0])
-                                                check_y = np.median(pc_stump_suitable.points[:,1])
+                                                x_median = statistics.median(xy_list[:, 0])
+                                                y_median = statistics.median(xy_list[:, 1])
+                                                check_x = np.median(pc_stump_suitable.points[:, 0])
+                                                check_y = np.median(pc_stump_suitable.points[:, 1])
 
                                                 x_min, y_min, z_min = pc_stump_suitable.points.min(axis=0)
                                                 x_max, y_max, z_max = pc_stump_suitable.points.max(axis=0)
-                                                check_r_median = ((x_max - x_min) + (y_max - y_min))/4
-                                                if (r_median > 0.65) or (r_median > 2.1*check_r_median) or (r_median == 0.0):
+                                                check_r_median = ((x_max - x_min) + (y_max - y_min)) / 4
+                                                if (r_median > 0.65) or (r_median > 2.1 * check_r_median) or (
+                                                        r_median == 0.0):
                                                     r_median = check_r_median
 
-                                                dist = math.sqrt((xy_list[0][0] - check_x)**2 + (xy_list[0][1] - check_y)**2)
-                                                if dist>0.25:
-                                                    dist = math.sqrt((x_median - check_x)**2 + (y_median - check_y)**2)
-                                                    if dist>0.25:
-                                                        save_center = [check_x,check_y,1]
+                                                dist = math.sqrt(
+                                                    (xy_list[0][0] - check_x) ** 2 + (xy_list[0][1] - check_y) ** 2)
+                                                if dist > 0.25:
+                                                    dist = math.sqrt(
+                                                        (x_median - check_x) ** 2 + (y_median - check_y) ** 2)
+                                                    if dist > 0.25:
+                                                        save_center = [check_x, check_y, 1]
                                                     else:
-                                                        save_center = [x_median,y_median,1]
+                                                        save_center = [x_median, y_median, 1]
                                                 else:
-                                                    save_center = [xy_list[0][0],xy_list[0][1],1]
+                                                    save_center = [xy_list[0][0], xy_list[0][1], 1]
 
                                                 tfni += 1
-                                                filename_stumps_out = 'int' + str(intensity_cut_make) + '_' + str(tfni).rjust(4, '0') + '.pcd'
-                                                fname_stumps_out = os.path.join(path_file_stumps, filename_stumps_out) 
+                                                filename_stumps_out = 'int' + str(intensity_cut_make) + '_' + str(
+                                                    tfni).rjust(4, '0') + '.pcd'
+                                                fname_stumps_out = os.path.join(path_file_stumps, filename_stumps_out)
                                                 pc_stump_suitable.save(fname_stumps_out)
-
-                                                # Добавляем созданный PCD-файл в список
-                                                created_pcd_files.append(fname_stumps_out)
 
                                                 TN.append(filename_stumps_out)
                                                 TCX.append(save_center[0])
                                                 TCY.append(save_center[1])
-                                                TD.append(r_median*2)
+                                                TD.append(r_median * 2)
                 if cs.cut_data_method == 'none':
                     break
 
-        TN=np.asarray(TN)
-        TCX=np.asarray(TCX)
-        TCY=np.asarray(TCY)
-        TD=np.asarray(TD)
+        TN = np.asarray(TN)
+        TCX = np.asarray(TCX)
+        TCY = np.asarray(TCY)
+        TD = np.asarray(TD)
 
-        bd = pd.DataFrame({"Name_stump"+'_int' + str(intensity_cut_make): TN,"X": TCX,"Y": TCY,"Diameter"+'_int' + str(intensity_cut_make): TD})
-        bd.to_csv(file_name_csv, index = False, sep=';')
+        bd = pd.DataFrame({"Name_stump" + '_int' + str(intensity_cut_make): TN, "X": TCX, "Y": TCY,
+                           "Diameter" + '_int' + str(intensity_cut_make): TD})
+        bd.to_csv(file_name_csv, index=False, sep=';')
 
         file = open(os.path.join(cs.path_base, "coordinates_paths.txt"), "a")
-        file.write("\n"+file_name_csv)
+        file.write("\n" + file_name_csv)
         file.close()
-
-        # Возвращаем список всех созданных PCD-файлов
-        return created_pcd_files

@@ -76,23 +76,16 @@ def run_coordinates(self):
         cs.fname_points = file_path
         cs.path_base = tmp_dir
 
-        files_to_show = []
-        created_files = coordinates.coordinates(intensity_cut_make, cs)
-        files_to_show.extend(created_files)
+        coordinates.coordinates(intensity_cut_make, cs)
         # Также делаем прогон с интенсивностью 5000 и 1000
-        created_files = coordinates.coordinates(5000, cs)
-        files_to_show.extend(created_files)
-        created_files = coordinates.coordinates(1000, cs)
-        files_to_show.extend(created_files)
+        coordinates.coordinates(5000, cs)
+        coordinates.coordinates(1000, cs)
+
 
         merge_coordinates.merge_coordinates(cs)
         csv_output_file = clear_excess_stumps.clear_excess_stumps(cs)
         self.openGLWidget.load_point_cloud(csv_output_file)
         self.add_file_to_list_widget(csv_output_file)
 
-        # Загружаем файлы в OpenGL и добавляем в ListWidget
-        for file_path in files_to_show:
-            self.openGLWidget.load_point_cloud(file_path)
-            self.add_file_to_list_widget(file_path)
 
     print("Обнаружение координат завершено.")

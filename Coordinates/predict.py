@@ -25,12 +25,12 @@ def farthest_point_sample(xyz, npoint):
 
 
 def test(src, model_name):
-
-    model_path = 'predictmdl/checkpoints/'+ model_name +'/models/model.t7'
+    model_path = 'Coordinates/predictmdl/checkpoints/'+ model_name +'/models/model.t7'
 
     species_names = ['Tree','Not_Tree']
-    # species_names = ['E','C','B','R','D','OC']
-    # species_names = ['E','C','B']
+    test_true = []
+    test_pred = []
+
     try:
         pc = PyntCloud.from_file(src)
         points = pc.points.loc[:,["x","y","z"]].values
@@ -53,19 +53,22 @@ def test(src, model_name):
         model = get_model(NUM_CLASSES,normal_channel=False).to(device)
         model.load_state_dict(torch.load(model_path))
         model = model.eval()
-        test_true = []
-        test_pred = []
+
         data, label = torch.tensor(X_test, device=device), torch.tensor(y_test, device=device)
         data = data.permute(0, 2, 1)
         logits, trans_feat = model(data)
         preds = logits.max(dim=1)[1].detach()
         test_true.append(label.cpu().numpy())
         test_pred.append(preds.cpu().numpy())
+
         if test_pred[0][0] == 1:
             ans = 0 #"Это не дерево"
         else:
             ans = 1 #"Это дерево"
-    except:
+    except Exception as e:
+        print("Exception:", str(e))
+        print("test_true:", test_true)
+        print("test_pred:", test_pred)
         ans = -1
     return ans
     # return test_pred[0][0]
