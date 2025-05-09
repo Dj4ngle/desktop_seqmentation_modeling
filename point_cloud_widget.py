@@ -7,6 +7,13 @@ import numpy as np
 import laspy
 import pywavefront
 import os
+import psutil
+from pynvml import (
+    nvmlInit,
+)
+import time 
+import csv
+from datetime import datetime
 
 class OpenGLWidget(QOpenGLWidget):
     def __init__(self, parent=None):
@@ -27,6 +34,26 @@ class OpenGLWidget(QOpenGLWidget):
 
         self.vbo_data = {}
         self.vbo_data_models = {}
+        
+        self.frame_count = 0
+        self.fps_start_time = time.perf_counter()
+        self.last_render_time = 0
+        self.process = psutil.Process()
+        nvmlInit()
+        
+        # Создание CSV-файла для логирования метрик
+        self.metrics_file = "metrics_log.csv"
+        file_exists = os.path.isfile(self.metrics_file)
+
+        with open(self.metrics_file, mode="a", newline="") as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow([
+                    "Timestamp",
+                    "FPS",
+                    "RenderTime_ms"
+                ])
+
 
 
     def load_point_cloud(self, filename):
@@ -208,6 +235,18 @@ class OpenGLWidget(QOpenGLWidget):
         glPopMatrix()
         self.update()
 
+        # Время конца отрисовки
+        render_end = time.perf_counter()
+        self.last_render_time = (render_end - self.fps_start_time) * 1000  # мс
+
+        self.frame_count += 1
+        if render_end - self.fps_start_time >= 1.0:
+            self.report_metrics()
+            self.fps_start_time = render_end
+            self.frame_count = 0
+            
+        
+
     def set_scale_factor(self, scale):
         self.scale_factor = scale
         self.update()
@@ -274,3 +313,20 @@ class OpenGLWidget(QOpenGLWidget):
             self.scale_factor = 100
 
         self.update()
+        
+    def report_metrics(self):
+        print(f"FPS: {self.frame_count}")
+        print(f"Render Time: {self.last_render_time:.2f} ms")
+        print("-" * 50)
+        
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Запись в CSV
+        with open(self.metrics_file, mode="a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                timestamp,
+                self.frame_count,
+                round(self.last_render_time, 2)
+            ])
+
