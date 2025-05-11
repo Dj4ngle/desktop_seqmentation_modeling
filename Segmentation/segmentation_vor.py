@@ -36,7 +36,7 @@ def make_binding_file(pc_area, ss):
     df = pd.DataFrame(rows)
     df.to_csv(path_csv, index=False, sep=';')
 
-def segmentation_vor(ss, tr_val, make_binding = True):
+def segmentation_vor(ss, tr_val, multiplier, make_binding = True):
     path_file_save = os.path.join(ss.path_base, ss.step1_folder_name)
     makedirs_if_not_exist(path_file_save)
 
@@ -46,15 +46,23 @@ def segmentation_vor(ss, tr_val, make_binding = True):
 
     label = pd.read_csv(file_name_coord, sep = ';')
 
-    # Оставляем только строки, где хотя бы один из лейблов >= указанного значения
-    label = label[
-        (label["Labels_int7000"] > tr_val) |
-        (label["Labels_int5000"] > tr_val) |
-        (label["Labels_int1000"] > tr_val)
-        ]
+    threshold = tr_val
+    print(f"Threshold value: {threshold}")
+
+    # Пока захардкожены названия полей
+    def meets_criteria(row, threshold, count_required):
+        count = sum(row[["Labels_int7000", "Labels_int5000", "Labels_int1000"]] >= threshold)
+        return count >= count_required
+
+    count_required = multiplier
+    label = label[label.apply(meets_criteria, axis=1, threshold=threshold, count_required=count_required)]
+
+    print(f"Number of points after filtering: {len(label)}")
+    if len(label) == 0:
+        print("No points meet the filtering criteria.")
+        return []
 
     coords = np.asarray(label[["X", "Y"]], dtype=np.float64)
-
 
     pc_area = PCD_AREA()
     pc_area.open(file_name_data, verbose = True)

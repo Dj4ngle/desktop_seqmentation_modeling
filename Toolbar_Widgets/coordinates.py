@@ -1,11 +1,11 @@
 import os
 
-from PyQt6.QtWidgets import (QDockWidget, QVBoxLayout, QWidget, QPushButton, QLabel, QComboBox, QLineEdit)
+from PyQt6.QtWidgets import (QDockWidget, QVBoxLayout, QWidget, QPushButton, QLabel, QComboBox, QLineEdit, QCheckBox)
 from PyQt6.QtCore import Qt, QRegularExpression
 from PyQt6.QtGui import QRegularExpressionValidator
 
 from Coordinates import coordinates, coord_settings, merge_coordinates, clear_excess_stumps
-from Segmentation import seg_settings, segmentation_vor
+from Segmentation import seg_settings, segmentation_vor, segmentation_ram, segmentation_clear
 
 
 def coordinates_dock_widget(self):
@@ -16,6 +16,15 @@ def coordinates_dock_widget(self):
         widget = QWidget()
         layout = QVBoxLayout()
 
+        # Флажки для выбора метода сегментации
+        self.checkbox_vot = QCheckBox("Segmentation Voronoi")
+        self.checkbox_ram = QCheckBox("Segmentation RAM")
+        self.checkbox_clear = QCheckBox("Segmentation Clear")
+
+        layout.addWidget(self.checkbox_vot)
+        layout.addWidget(self.checkbox_ram)
+        layout.addWidget(self.checkbox_clear)
+
         # Выпадающий список
         self.intensity_selection = QComboBox()
         self.intensity_selection.addItems(["-1", "0", "1"])  # Добавляем элементы в выпадающий список
@@ -24,6 +33,17 @@ def coordinates_dock_widget(self):
 
         # Поля ввода для intensity_cut_make
         self.intensity_inputs = []
+        self.multiplier_input = QLineEdit()
+        self.multiplier_input.setPlaceholderText("Введите множитель (например, 2)")
+        self.multiplier_input.setText("1")  # Default value
+
+        regex = QRegularExpression(r"^\d+$")
+        validator = QRegularExpressionValidator(regex)
+        self.multiplier_input.setValidator(validator)
+
+        layout.addWidget(QLabel("Нужное количество:"))
+        layout.addWidget(self.multiplier_input)
+
         default_values = ["7000", "5000", "1000"]
 
         for val in default_values:
@@ -62,6 +82,8 @@ def run_coordinates(self):
     if not selected_files:
         print("Ошибка: Не выбрано облако точек для обнаружения координат.")
         return
+
+    multiplier = int(self.multiplier_input.text())
 
     for file_path in selected_files:
         if not self.intensity_inputs:
@@ -104,12 +126,37 @@ def run_coordinates(self):
         ss.path_base = tmp_dir
         ss.csv_name_coord = csv_output_file
 
-        # проводим сегментацию
+        # Проводим сегментацию
         tr_val = int(self.intensity_selection.currentText())
-        segmented_files = segmentation_vor.segmentation_vor(ss, tr_val, make_binding = True)
-        for file in segmented_files:
-            self.openGLWidget.load_point_cloud(file)
-            self.add_file_to_list_widget(file)
+
+        # Вызываем только выбранные методы
+        if self.checkbox_clear.isChecked():
+            segmented_files_vot = segmentation_vor.segmentation_vor(ss, tr_val, multiplier, make_binding=True)
+            for file in segmented_files_vot:
+                self.openGLWidget.load_point_cloud(file)
+                self.add_file_to_list_widget(file)
+            segmented_files_ram = segmentation_ram.segmentation_ram(ss, tr_val, multiplier)
+            for file in segmented_files_ram:
+                self.openGLWidget.load_point_cloud(file)
+                self.add_file_to_list_widget(file)
+            segmented_files_clear = segmentation_clear.segmentation_clear(ss, tr_val, multiplier)
+            for file in segmented_files_clear:
+                self.openGLWidget.load_point_cloud(file)
+                self.add_file_to_list_widget(file)
+        elif self.checkbox_ram.isChecked():
+            segmented_files_vot = segmentation_vor.segmentation_vor(ss, tr_val, multiplier, make_binding=True)
+            for file in segmented_files_vot:
+                self.openGLWidget.load_point_cloud(file)
+                self.add_file_to_list_widget(file)
+            segmented_files_ram = segmentation_ram.segmentation_ram(ss, tr_val, multiplier)
+            for file in segmented_files_ram:
+                self.openGLWidget.load_point_cloud(file)
+                self.add_file_to_list_widget(file)
+        elif self.checkbox_vot.isChecked():
+            segmented_files_vot = segmentation_vor.segmentation_vor(ss, tr_val, multiplier, make_binding=True)
+            for file in segmented_files_vot:
+                self.openGLWidget.load_point_cloud(file)
+                self.add_file_to_list_widget(file)
 
 
     print("Обнаружение координат завершено.")
