@@ -13,6 +13,9 @@ from menu_bar import MenuBar
 from Toolbar.tool_bar import ToolBar
 import pylas
 
+# Пример!!!
+# from Toolbar_Widgets import example_widget
+
 class MyMainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super(MyMainWindow, self).__init__()
@@ -68,6 +71,14 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.toolbarsCreator.coordinatesAction.triggered.connect(lambda:
                                                               self.toggle_dock_widget('coordinates',
                                                                                       Qt.DockWidgetArea.LeftDockWidgetArea))
+
+        # Пример!!!
+        # self.toolbarsCreator.exampleAction.triggered.connect(
+        #     lambda: self.toggle_dock_widget(
+        #         'example',  # ключ из init_dock_widgets
+        #         Qt.DockWidgetArea.LeftDockWidgetArea
+        #     )
+        # )
 
         self.toolbarsCreator.frontViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(1, 1, 1))
         self.toolbarsCreator.backViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(1, 180, 1))

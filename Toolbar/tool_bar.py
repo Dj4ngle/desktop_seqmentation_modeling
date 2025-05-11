@@ -19,6 +19,10 @@ class ToolBar:
         editToolBar.addAction(self.taxationAction)
         editToolBar.addAction(self.modelingAction)
         editToolBar.addAction(self.coordinatesAction)
+
+        # Пример!!!
+        # editToolBar.addAction(self.exampleAction)  # ← добавили
+
         self.parent.addToolBar(editToolBar)
 
         # Использование объекта QToolBar и области панели инструментов
@@ -38,6 +42,12 @@ class ToolBar:
         self.taxationAction = QAction(QIcon(os.path.join(base_path, "images/taxation.png")), "Таксация", self.parent)
         self.modelingAction = QAction(QIcon(os.path.join(base_path, "images/modeling.png")), "Моделирование", self.parent)
         self.coordinatesAction = QAction(QIcon(os.path.join(base_path, "images/coordinates.png")), "Координаты", self.parent)
+
+        # Пример!!!
+        # self.exampleAction = QAction(
+        #     QIcon(os.path.join(base_path, "images/example.png")),
+        #     "Пример", self.parent
+        # )
 
         # Действия для панели инструментов "Панель управления вращения"
         self.frontViewAction = QAction(QIcon(os.path.join(base_path, "images/FrontView.png")), "Вид спереди", self.parent)

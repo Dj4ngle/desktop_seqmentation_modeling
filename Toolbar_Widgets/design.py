@@ -7,6 +7,8 @@ from Toolbar_Widgets import ground_extraction, taxation, segmentation, modeling,
 from point_cloud_widget import OpenGLWidget
 from PyQt6.QtCore import Qt
 
+# Пример!!!
+# from Toolbar_Widgets import example_widget
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -46,7 +48,10 @@ class Ui_MainWindow(object):
             'segmentation': segmentation.segmentation_dock_widget(self),
             'taxation': taxation.taxation_dock_widget(self),
             'modeling': modeling.modeling_dock_widget(self),
-            'coordinates': coordinates.coordinates_dock_widget(self)
+            'coordinates': coordinates.coordinates_dock_widget(self),
+
+            # Пример!!!
+            # 'example': example_widget.example_dock_widget(self)  # ← наш виджет
         }
 
     def properties_dock_widget(self):
