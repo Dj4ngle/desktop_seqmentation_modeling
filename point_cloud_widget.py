@@ -55,12 +55,16 @@ class OpenGLWidget(QOpenGLWidget):
             print("Unsupported file format")
             return
 
+        raw_points = points.copy()
         points_centered = points - np.mean(points, axis=0)
+
         # Создание и сохранение VBO
         point_vbo = vbo.VBO(np.array(points_centered, dtype=np.float32))
         color_vbo = vbo.VBO(np.array(colors, dtype=np.float32))
+
         self.vbo_data[filename] = (point_vbo, color_vbo, len(points_centered))
-        self.point_clouds[filename] = {'active': True, 'data': points_centered}
+        self.point_clouds[filename] = {'active': True, 'data': points_centered, 'full_data': raw_points}
+
         self.scale_factor = self.calculate_scale_factor_for_all()
         self.update()
 
