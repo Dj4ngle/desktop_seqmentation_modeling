@@ -1,3 +1,23 @@
+Metadata-Version: 2.1
+Name: desktop-segmentation-modeling
+Version: 1.0.6
+Summary: A powerful desktop application for 3D point cloud and image segmentation using machine learning.
+Home-page: https://github.com/Dj4ngle/desktop_seqmentation_modeling
+Author: Dj4ngle
+Author-email: 
+License: MIT
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Science/Research
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Topic :: Scientific/Engineering :: GIS
+Classifier: Topic :: Scientific/Engineering :: Image Processing
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+
 ## Как подключить собственный виджет
 
 Ниже — **краткая инструкция** по добавлению нового док-виджета и кнопки на панель инструментов.

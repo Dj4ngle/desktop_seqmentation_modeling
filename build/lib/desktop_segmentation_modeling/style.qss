@@ -1,0 +1,192 @@
+QMenuBar{
+    background-color: #3F3F46; /* Цвет фона элементов меню */
+    color: #CCCEDB;
+}
+
+QMenuBar::item {
+    background-color: #3F3F46; /* Цвет фона элементов меню */
+    color: #CCCEDB;
+    padding-top: 4px;
+    padding-right: 7px;
+    padding-bottom: 4px;
+    padding-left: 7px;
+    border: 1px solid #3F3F46; /* Границы флажка, когда выбран */
+    border-radius: 7px; /* Скругление углов флажка */
+}
+
+QMenuBar::item:selected {
+    background-color: #52525a; /* Цвет фона выбранных элементов меню */ 
+    color: #CCCEDB;
+}
+
+QMenu {
+    background-color: #3F3F46; /* Цвет фона подэлементов меню */
+    color: #CCCEDB;
+    border:none;
+}
+
+QMenu::item {
+    background-color: #3F3F46; /* Цвет фона подэлементов меню */
+    color: #CCCEDB;
+    padding-top: 4px;
+    padding-right: 15px;
+    padding-bottom: 4px;
+    padding-left: 7px;
+    border: 1px solid #3F3F46; /* Границы флажка, когда выбран */
+    border-radius: 7px; /* Скругление углов флажка */
+    
+}
+
+QMenu::item:selected {
+    background-color: #52525a; /* Цвет фона выбранных подэлементов меню */
+    color: #CCCEDB;
+}
+
+QMenu::item:pressed {
+    background-color: #66666d; /* Цвет фона выбранных подэлементов меню */
+    color: #CCCEDB;
+}
+
+QAction::item{
+    background-color: #52525a; /* Цвет фона выбранных подэлементов меню */
+    color: #CCCEDB;
+}
+
+QToolButton:hover {
+    background-color: #52525a;
+}
+
+QToolButton:pressed {
+    background-color: #66666d;
+}
+
+QToolBar{
+    background-color: #3F3F46; /* Цвет фона элементов меню */
+    color: #CCCEDB;
+    border: none; /* Полностью убрать границу */
+}
+
+QToolTip {
+    background-color: #494950; /* Цвет фона подсказки */
+    color: #CCCEDB;
+}
+
+QMainWindow{
+    background-color: #3F3F46; /* Цвет фона главного окна */
+    color: #CCCEDB;
+}
+
+QPushButton{
+    background-color: #3F3F46; /* Цвет фона главного окна */
+    color: #CCCEDB;
+}
+
+QListWidget{
+    background-color: #3F3F46; /* Цвет фона главного окна */
+    color: #CCCEDB;
+    border: 2px solid #494950;
+    padding:5px;
+}
+
+QCheckBox {
+    background-color: #3F3F46; /* Цвет фона флажка */
+    color: #CCCEDB; /* Цвет текста */
+    spacing: 5px; /* Отступ между флажком и текстом */
+}
+
+QCheckBox:checked {
+    background-color: #3F3F46; /* Цвет фона флажка */
+    color: #1E88E5; /* Цвет текста */
+    spacing: 5px; /* Отступ между флажком и текстом */
+}
+
+QCheckBox::indicator:unchecked {
+    background-color: #494950; /* Цвет фона флажка, когда не выбран */
+    border: 1px solid #494950; /* Границы флажка, когда выбран */
+    border-radius: 3px; /* Скругление углов флажка */
+}
+
+QCheckBox::indicator:pressed {
+    background-color: #52525a; /* Цвет фона флажка, когда выбран */
+    border: 1px solid #52525a; /* Границы флажка, когда выбран */
+    border-radius: 3px; /* Скругление углов флажка */
+}
+
+QCheckBox::indicator:checked {
+    background-color: #66666d; /* Цвет фона флажка, когда выбран */
+    border: 1px solid #1E88E5; /* Границы флажка, когда выбран */
+    border-radius: 3px; /* Скругление углов флажка */
+    image: url(images/check1.png);
+    width:11px;
+    height:11px;
+}
+
+QScrollBar:horizontal {
+    background: #3F3F46; /* Цвет фона вертикальной полосы прокрутки */
+}
+
+QScrollBar:vertical {
+    background: #3F3F46; /* Цвет фона вертикальной полосы прокрутки */
+}
+
+QLabel{
+    background-color: #3F3F46; /* Цвет фона главного окна */
+    color: #CCCEDB;
+}
+
+QDockWidget{
+    background-color: #494950;
+    color: #CCCEDB;
+}
+
+QDockWidget::title {
+    text-align: left;
+    background-color: #494950;  /* Цвет фона шапки */
+    padding: 1px;
+    color: #CCCEDB;
+}
+
+QDockWidget::close-button, QDockWidget::float-button {
+    background-color: #494950;
+    border-color:#CCCEDB;
+}
+
+QDockWidget::close-button:hover, QDockWidget::float-button:hover {
+    background-color: #52525a;
+}
+
+QDockWidget::close-button:pressed, QDockWidget::float-button:pressed {
+    background-color: #66666d;
+}
+
+QPlainTextEdit{
+    background-color: #3F3F46;
+    color: #CCCEDB;
+    margin: 10px;
+    border: 2px solid #494950;
+}
+
+QLineEdit{
+    background-color: #494950;
+    color: #CCCEDB;
+    border:none;
+}
+
+QRadioButton{
+    background-color: #494950;
+    color: #CCCEDB;
+}
+
+QComboBox {
+    background-color: #494950;
+    color: #CCCEDB;
+    border:none;
+}
+QComboBox QAbstractItemView {
+    background-color: #494950;   /* Цвет фона элементов */
+    color: #CCCEDB;              /* Цвет текста элементов */
+}
+QComboBox QAbstractItemView::item:selected {
+    background-color: #52525a;   /* Цвет фона выбранного элемента */
+    color: #CCCEDB;
+}
