@@ -1,22 +1,38 @@
 import sys
 from datetime import datetime, timedelta
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QObject, pyqtSignal
 from PyQt6.QtWidgets import QDockWidget, QPlainTextEdit
+
+
+class ConsoleWriter(QObject):
+    """Вспомогательный класс для потокобезопасной записи в консоль"""
+    message_signal = pyqtSignal(str)
+    
+    def __init__(self, console_widget):
+        super().__init__()
+        self.console_widget = console_widget
+        self.message_signal.connect(self._write_message)
+    
+    def _write_message(self, message):
+        """Слот для записи сообщения в консоль (выполняется в главном потоке)"""
+        if (isinstance(message, str) and message != '\n'):
+            time_now = datetime.utcnow() + timedelta(hours=3)
+            time_str = time_now.strftime("%H:%M:%S")
+            message_with_time = f"[{time_str}] {message}"
+            self.console_widget.appendPlainText(message_with_time.strip())
+        elif message != '\n':
+            self.console_widget.appendPlainText(str(message))
 
 
 class ConsoleWidget(QPlainTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setReadOnly(True)
+        self.writer = ConsoleWriter(self)
 
     def write(self, message):
-        if (isinstance(message, str) and message != '\n'):
-            time_now = datetime.utcnow() + timedelta(hours=3)
-            time_str = time_now.strftime("%H:%M:%S")
-            message_with_time = f"[{time_str}] {message}"
-            self.appendPlainText(message_with_time.strip())
-        elif message != '\n':
-            self.appendPlainText(str(message))
+        """Потокобезопасная запись через сигнал"""
+        self.writer.message_signal.emit(message)
 
     def flush(self):
         pass
@@ -49,6 +65,7 @@ class ConsoleOutput:
     def write(self, message):
         self.stdout.write(message)
         self.stdout.flush()
+        # Используем потокобезопасный метод write консоли
         self.console_widget.write(message)
 
     def flush(self):

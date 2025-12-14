@@ -6,6 +6,8 @@ from pyntcloud import PyntCloud
 import os
 import pandas as pd
 from tqdm import tqdm
+from pathlib import Path
+import desktop_segmentation_modeling
 
 def farthest_point_sample(xyz, npoint):
     device = xyz.device
@@ -25,7 +27,12 @@ def farthest_point_sample(xyz, npoint):
 
 
 def test(src, model_name):
-    model_path = 'Coordinates/predictmdl/checkpoints/'+ model_name +'/models/model.t7'
+    # Получаем путь к файлам пакета для корректной работы при установке как библиотека
+    # Используем __file__ пакета для определения пути
+    package_file = Path(desktop_segmentation_modeling.__file__).resolve()
+    package_dir = package_file.parent  # desktop_segmentation_modeling
+    model_path = package_dir / 'Coordinates' / 'predictmdl' / 'checkpoints' / model_name / 'models' / 'model.t7'
+    model_path = str(model_path)
 
     species_names = ['Tree','Not_Tree']
     test_true = []
@@ -51,7 +58,7 @@ def test(src, model_name):
         NUM_CLASSES = len(int2name)
 
         model = get_model(NUM_CLASSES,normal_channel=False).to(device)
-        model.load_state_dict(torch.load(model_path))
+        model.load_state_dict(torch.load(model_path, map_location=device))
         model = model.eval()
 
         data, label = torch.tensor(X_test, device=device), torch.tensor(y_test, device=device)

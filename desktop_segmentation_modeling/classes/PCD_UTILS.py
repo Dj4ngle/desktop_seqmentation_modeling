@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import pprint
 from time import time
-from pypcd import pypcd #python -m pip install git+https://github.com/DanielPollithy/pypcd.git   
+from .Py_PCD import PointCloudPCD
 import open3d as o3d
 import pyvista
 import random
@@ -33,7 +33,9 @@ class PCD_UTILS:
                                         ('y', np.float32),
                                         ('z', np.float32),
                                         ('Intensity', np.float32)])).squeeze()
-        pc = pypcd.PointCloud(md, pc_data)
+        pc = PointCloudPCD(md, pc_data)
+        # Теперь save_pcd должен быть методом класса PointCloudPCD.
+        # Просто возвращаем pc, метод реализован в нужном классе.
         return pc
 
 
@@ -47,7 +49,7 @@ class PCD_UTILS:
             ix, ii, ir = integer, indexes of fields 'x', 'Intensity' and 'rgb'
         """
         start = time()
-        cloud = pypcd.PointCloud.from_path(file_path)
+        cloud = PointCloudPCD.from_path(file_path)
         new_cloud_data = cloud.pc_data.copy()
         if verbose:
             print(f"Opening {file_path}")
@@ -122,7 +124,7 @@ class PCD_UTILS:
 
         center = vor.points.mean(axis=0)
         if radius is None:
-            radius = vor.points.ptp().max()*2
+            radius = np.ptp(vor.points, axis=0).max() * 2
 
         # Construct a map containing all ridges for a given point
         all_ridges = {}

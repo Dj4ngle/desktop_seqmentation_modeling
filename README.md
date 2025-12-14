@@ -1,143 +1,173 @@
-## Как подключить собственный виджет
+# Desktop Segmentation and Modeling
 
-Ниже — **краткая инструкция** по добавлению нового док-виджета и кнопки на панель инструментов.
+A powerful desktop application for 3D point cloud and image segmentation using machine learning.
 
-В примерах используется тестовый виджет `example_widget`. Полный код лежит в `Toolbar_Widgets/example_widget.py`.
+## Установка
 
----
+```bash
+pip install desktop-segmentation-modeling
+```
 
-### 1. Создаём файл виджета
+## Быстрый старт
+
+### Запуск приложения
 
 ```python
-# Toolbar_Widgets/example_widget.py
-from PyQt6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QLabel, QPushButton
-from PyQt6.QtCore import Qt
+import desktop_segmentation_modeling
 
-def example_dock_widget(self):
-    """Возвращает (и кэширует) QDockWidget с нашим GUI."""
-    if 'example' not in self.dock_widgets:
-        dock = QDockWidget("Пример")
-        dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+# Запуск PyQt приложения
+desktop_segmentation_modeling.run_app()
+```
 
-        widget  = QWidget()
-        layout  = QVBoxLayout(widget)
-        layout.addWidget(QLabel("Привет из example_widget!"))
-        btn = QPushButton("Вывести сообщение")
-        btn.clicked.connect(lambda: print("example_widget: кнопка нажата"))
-        layout.addWidget(btn)
+### Использование API
 
-        dock.setWidget(widget)
-        self.dock_widgets['example'] = dock          # обязательно кэшируем!
+```python
+import desktop_segmentation_modeling
 
-    return self.dock_widgets['example']
+# 1. Обнаружение координат деревьев
+csv_file = desktop_segmentation_modeling.run_coordinates(
+    point_cloud_path='data/forest.las',
+    intensity_values=[7000, 5000, 1000]
+)
+
+# 2. Сегментация облака точек
+results = desktop_segmentation_modeling.run_segmentation(
+    point_cloud_path='data/forest.las',
+    eps=0.78,
+    min_samples=132
+)
+
+# 3. Таксация дерева
+taxation = desktop_segmentation_modeling.run_taxation(
+    point_cloud_path='data/tree.las',
+    calculate_dbh=True,
+    calculate_height=True
+)
+```
+
+## Публичный API
+
+### `run_app()`
+
+Запускает PyQt приложение для работы с облаками точек.
+
+**Параметры:** Нет
+
+**Пример:**
+```python
+import desktop_segmentation_modeling
+desktop_segmentation_modeling.run_app()
 ```
 
 ---
 
-### 2. Изменения в **`Toolbar_Widgets/design.py`**
+### `run_segmentation()`
 
-Функция `init_dock_widgets()` уже лежит именно здесь (а не в `main_window.py`).
+Выполняет сегментацию облака точек с помощью алгоритма DBSCAN.
 
-1. Импортируйте новый модуль над функцией:
+**Параметры:**
+- `point_cloud_path` (str): Путь к файлу облака точек (.las, .pcd)
+- `eps` (float, default=0.78): Максимальное расстояние между точками в кластере
+- `min_samples` (int, default=132): Минимальное количество точек для кластера
+- `output_dir` (str, optional): Директория для сохранения результатов
 
+**Возвращает:**
 ```python
-
-from desktop_segmentation_modeling.Toolbar_Widgets import example_widget
+{
+    'segments': [список путей к файлам],
+    'num_segments': количество сегментов,
+    'labels': массив меток кластеров
+}
 ```
 
-2. В самой функции добавьте строку в словарь:
-
+**Пример:**
 ```python
-def init_dock_widgets(self):
-    self.dock_widgets = {
-        'ground_extraction': ground_extraction.ground_extraction_dock_widget(self),
-        'segmentation'     : segmentation.segmentation_dock_widget(self),
-        'taxation'         : taxation.taxation_dock_widget(self),
-        'modeling'         : modeling.modeling_dock_widget(self),
-        'coordinates'      : coordinates.coordinates_dock_widget(self),
-        'example'          : example_widget.example_dock_widget(self)   # ← наш виджет
-    }
-```
-
----
-
-### 3. Добавляем кнопку на панель инструментов
-
-1. Положите PNG-иконку (64 × 64) в папку `images/` (например `example.png`).
-
-2. В **`Toolbar/tool_bar.py`**
-
-```python
-class ToolBar:
-    def create_actions(self):
-        # …другие действия…
-        self.exampleAction = QAction(
-            QIcon(os.path.join(base_path, "images/example.png")),
-            "Пример", self.parent
-        )
-
-    def _createToolBars(self):
-        editToolBar = QToolBar("Панель управления взаимодействием", self.parent)
-        # …существующие addAction…
-        editToolBar.addAction(self.exampleAction)       # ← добавили
-        self.parent.addToolBar(editToolBar)
-```
-
----
-
-### 4. Связываем кнопку с показом виджета
-
-В **`main_window.py`** (конструктор `MyMainWindow.__init__`):
-
-```python
-self.toolbarsCreator.exampleAction.triggered.connect(
-    lambda: self.toggle_dock_widget(
-        'example',                         # ключ из init_dock_widgets
-        Qt.DockWidgetArea.LeftDockWidgetArea
-    )
+results = desktop_segmentation_modeling.run_segmentation(
+    point_cloud_path='data/pointcloud.las',
+    eps=0.78,
+    min_samples=132
 )
 ```
 
 ---
 
-### 5. (Необязательно) работа со списками файлов
+### `run_taxation()`
 
-Если ваш виджет создаёт новые облака/модели, вызывайте:
+Выполняет таксацию дерева (расчет параметров) из облака точек.
 
+**Параметры:**
+- `point_cloud_path` (str): Путь к файлу облака точек дерева (.las, .pcd)
+- `calculate_dbh` (bool, default=True): Рассчитывать диаметр на высоте груди
+- `calculate_height` (bool, default=True): Рассчитывать высоту дерева
+- `dbh_height` (float, default=1.3): Высота для расчета DBH в метрах
+
+**Возвращает:**
 ```python
-self.openGLWidget.load_point_cloud(path)
-self.add_file_to_list_widget(path)
+{
+    'DBH': диаметр на высоте груди (float или str),
+    'Height': высота дерева (float),
+    'points_count': количество точек (int)
+}
+```
+
+**Пример:**
+```python
+results = desktop_segmentation_modeling.run_taxation(
+    point_cloud_path='data/tree.las',
+    calculate_dbh=True,
+    calculate_height=True
+)
 ```
 
 ---
 
-### 6. Проверка
+### `run_coordinates()`
 
-1. Запустите приложение.
-2. Нажмите кнопку **«Пример»** в панели инструментов.
-3. Откроется док-панель с надписью «Привет из example\_widget!»; при нажатии кнопки в панели появится вывод в консоль.
+Выполняет обнаружение координат деревьев (пней) из облака точек.
+
+**Параметры:**
+- `point_cloud_path` (str): Путь к файлу облака точек (.las, .pcd)
+- `intensity_values` (list, default=[7000, 5000, 1000]): Список значений интенсивности
+- `output_dir` (str, optional): Директория для сохранения (по умолчанию `tmp/`)
+- `shape_file` (str, optional): Путь к файлу границ участка (.shp)
+- `trajectory_file` (str, optional): Путь к файлу траектории (.las) - для метода `flood_fill`
+- `cut_data_method` (str, default="voronoi_tessellation"): Метод разбиения на ячейки
+  - `"voronoi_tessellation"` - диаграмма Вороного
+  - `"flood_fill"` - заливка по траектории
+  - `"none"` - без разбиения
+- `height_min` (float, default=0.0): Минимальная высота для фильтрации (метры)
+- `height_max` (float, default=3.0): Максимальная высота для фильтрации (метры)
+- `intensity_cut` (int, default=0): Минимальное значение интенсивности
+
+**Возвращает:**
+- `str`: Путь к CSV файлу с координатами деревьев
+
+**Пример:**
+```python
+csv_file = desktop_segmentation_modeling.run_coordinates(
+    point_cloud_path='data/forest.las',
+    intensity_values=[7000, 5000, 1000],
+    output_dir='output/coordinates'
+)
+```
 
 ---
 
-### 7. Шпаргалка имён
+## Подробная документация
 
-| Что                            | Где правим / кладём                     | Именование                        |
-| ------------------------------ | --------------------------------------- | --------------------------------- |
-| Файл виджета                   | `Toolbar_Widgets/<name>.py`             | любое (`example_widget.py`)       |
-| Функция создания дока          | внутри файла                            | `<name>_dock_widget(self)`        |
-| Кэш-ключ в `self.dock_widgets` | `design.py → init_dock_widgets()`       | `'example'` (совпадает с кнопкой) |
-| QAction                        | `Toolbar/tool_bar.py`                   | `<name>Action`                    |
-| Показ/скрытие                  | `main_window.py` (`toggle_dock_widget`) | ключ `'example'`                  |
+Полная документация по использованию API доступна в файле [API_USAGE.md](API_USAGE.md) в репозитории проекта.
 
-### 8. Часто задаваемые вопросы
+## Требования
 
-**Q:** Почему в `example_dock_widget` мы кладём док в `self.dock_widgets`?  
-**A:** Чтобы метод `toggle_dock_widget` в `MyMainWindow` мог находить и показывать/скрывать панель, не создавая её каждый раз заново.
+- Python >= 3.11
+- См. [requirements.txt](requirements.txt) для полного списка зависимостей
 
-**Q:** Как отключить / скрыть все остальные панели, когда открывается моя?  
-**A:** Ничего делать не нужно — это уже реализовано в методе `toggle_dock_widget`.
+## Поддерживаемые форматы
 
-**Q:** Можно ли подключить тяжёлую бизнес-логику в отдельном модуле?  
-**A:** Да. Рекомендуется создать директорию `logic/<name>/` и импортировать её из виджета.
+- **LAS** - стандартный формат LiDAR данных
+- **PCD** - формат облаков точек Point Cloud Data
+- **CSV** - для координат (разделитель `;`)
 
 ---
+
+## Как подключить собственный виджет

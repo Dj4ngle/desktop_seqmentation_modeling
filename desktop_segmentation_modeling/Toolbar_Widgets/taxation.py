@@ -1,9 +1,10 @@
 from PyQt6.QtWidgets import (QDockWidget, QCheckBox, QVBoxLayout, QWidget,
-                             QPushButton, QLabel, QListWidget, QMessageBox,
-                             QGridLayout, QDoubleSpinBox)
+                             QPushButton, QLabel, QMessageBox,
+                             QGridLayout, QDoubleSpinBox, QApplication, QScrollArea)
 from PyQt6.QtCore import Qt
 import numpy as np
 import open3d as o3d  # Используем Open3D для обработки облаков точек
+import os
 
 
 # TreeTaxationLogic - это класс для реализации таксации
@@ -98,13 +99,12 @@ def taxation_dock_widget(self):
         widget = QWidget()
         layout = QVBoxLayout()
 
-        # 1. Список загруженных облаков точек
-        layout.addWidget(QLabel("📂 **Облака точек** (Выберите облако для таксации):"))
-        self.taxation_list_widget = QListWidget()
-        # Этот список должен заполняться из self.openGLWidget.point_clouds
-        # На данный момент, мы заполним его при открытии дока, если есть данные
-        update_taxation_list(self)
-        layout.addWidget(self.taxation_list_widget)
+        # 1. Информация о выборе файлов
+        layout.addWidget(QLabel("📂 **Облака точек** (Выберите файлы из списка 'Файлы'):"))
+        info_label = QLabel("Используйте чекбоксы в виджете 'Файлы' для выбора облаков точек")
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: gray; font-size: 10pt;")
+        layout.addWidget(info_label)
 
         # 2. Параметры таксации и настройки
         layout.addWidget(QLabel("⚙️ **Параметры для расчета:**"))
@@ -140,12 +140,25 @@ def taxation_dock_widget(self):
 
         # 4. Поле для вывода результатов
         layout.addWidget(QLabel("📋 **Результаты:**"))
-        self.results_label = QLabel("Выберите облако и нажмите 'Рассчитать параметры'.")
+        self.results_label = QLabel("Выберите облака точек в виджете 'Файлы' и нажмите 'Рассчитать параметры'.")
         self.results_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse)  # Чтобы можно было копировать текст
-        layout.addWidget(self.results_label)
-
-        layout.addStretch(1)  # Заполнение пустого места
+        self.results_label.setWordWrap(True)  # Перенос текста
+        self.results_label.setStyleSheet("""
+            QLabel {
+                padding: 5px;
+                border-radius: 3px;
+            }
+        """)
+        
+        # Создаем скроллируемую область для результатов
+        scroll_area = QScrollArea()
+        scroll_area.setWidget(self.results_label)
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setMaximumHeight(200)  # Ограничиваем максимальную высоту
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        layout.addWidget(scroll_area)
 
         widget.setLayout(layout)
         taxation_dock.setWidget(widget)
@@ -158,17 +171,6 @@ def taxation_dock_widget(self):
     return self.dock_widgets['taxation']
 
 
-def update_taxation_list(self):
-    """Обновляет список облаков точек в виджете таксации."""
-    if hasattr(self, 'taxation_list_widget') and hasattr(self, 'openGLWidget'):
-        self.taxation_list_widget.clear()
-
-        # Добавляем только активные облака точек
-        for filename, info in self.openGLWidget.point_clouds.items():
-            if info['active']:
-                self.taxation_list_widget.addItem(filename)
-
-
 def run_taxation_calculation(self):
     """
     Выполняет логику расчета таксации при нажатии на кнопку.
@@ -177,52 +179,99 @@ def run_taxation_calculation(self):
         QMessageBox.warning(self, "Ошибка", "Логика таксации не инициализирована.")
         return
 
-    # Получаем выбранный элемент
-    selected_items = self.taxation_list_widget.selectedItems()
-    if not selected_items:
-        self.results_label.setText("⚠️ **Ошибка:** Выберите облако точек из списка.")
+    # Получаем выбранные файлы из главного списка (как в моделировании)
+    selected_files = []
+    for index in range(self.listWidget.count()):
+        item = self.listWidget.item(index)
+        checkbox = self.listWidget.itemWidget(item)
+        if checkbox and checkbox.isChecked():
+            selected_files.append(checkbox.property("filePath"))
+    
+    if not selected_files:
+        self.results_label.setText("⚠️ **Ошибка:** Выберите хотя бы одно облако точек в виджете 'Файлы'.")
         return
-
-    filename = selected_items[0].text()
 
     # Получаем выбранные параметры
     calculate_dbh = self.checkbox_dbh.isChecked()
     calculate_height = self.checkbox_height.isChecked()
     dbh_height = self.spinbox_dbh_height.value()  # Получаем высоту DBH
 
-    # Вносим изменения в логику: теперь она должна принимать высоту DBH
-    # ПЕРЕРАБОТКА: Внутри TreeTaxationLogic мы используем 1.3 м по умолчанию,
-    # нужно передать значение или изменить класс.
-    # Для простоты, пока оставим 1.3м внутри класса, но в реальном коде лучше передавать.
-    # Так как вы просили только "костяк", я не буду сильно менять логику.
-
-    self.results_label.setText(f"Расчет параметров для: **{filename}**...")
-
-    results, error = self.taxation_logic.calculate_tree_parameters(
-        filename,
-        calculate_dbh=calculate_dbh,
-        calculate_height=calculate_height
-    )
-
-    if error:
-        self.results_label.setText(f"❌ **Ошибка расчета для {filename}:**\n{error}")
-        return
-
-    if not results:
-        self.results_label.setText(f"⚠️ **Внимание:** Расчет для {filename} не дал результатов.")
-        return
-
-    # Форматирование и вывод результатов
-    result_text = f"✅ **Результаты таксации для {filename}:**\n"
-
-    if 'Height' in results and calculate_height:
-        result_text += f"- **Высота:** {results['Height']:.2f} м\n"
-
-    if 'DBH' in results and calculate_dbh:
-        # DBH может быть строкой, если произошла ошибка
-        if isinstance(results['DBH'], str):
-            result_text += f"- **DBH:** {results['DBH']} (на высоте 1.3 м)\n"
+    # Обновляем логику для использования dbh_height
+    # Создаем временный класс или обновляем существующий
+    class TaxationLogicWithDBHHeight(TreeTaxationLogic):
+        def calculate_tree_parameters(self, filename, calculate_dbh=True, calculate_height=True, dbh_height=1.3):
+            if filename not in self.opengl_widget.point_clouds or not self.opengl_widget.point_clouds[filename]['full_data'] is not None:
+                return None, "Облако точек не найдено или не имеет полных данных."
+            
+            points = self.opengl_widget.point_clouds[filename]['full_data']
+            results = {}
+            
+            if calculate_height:
+                z_min = np.min(points[:, 2])
+                z_max = np.max(points[:, 2])
+                height = z_max - z_min
+                results['Height'] = height
+            
+            if calculate_dbh:
+                z_min = np.min(points[:, 2])
+                dbh_section_height = z_min + dbh_height
+                dbh_section_thickness = 0.1
+                
+                z_filter = (points[:, 2] >= dbh_section_height - dbh_section_thickness / 2) & \
+                           (points[:, 2] <= dbh_section_height + dbh_section_thickness / 2)
+                dbh_points = points[z_filter, :]
+                
+                if len(dbh_points) < 10:
+                    results['DBH'] = "Недостаточно точек для DBH"
+                else:
+                    xy_points = dbh_points[:, :2]
+                    center_x, center_y = np.mean(xy_points, axis=0)
+                    radii = np.sqrt((xy_points[:, 0] - center_x) ** 2 + (xy_points[:, 1] - center_y) ** 2)
+                    median_radius = np.median(radii)
+                    dbh = median_radius * 2
+                    results['DBH'] = dbh
+            
+            return results, None
+    
+    # Используем обновленную логику
+    taxation_logic = TaxationLogicWithDBHHeight(self.openGLWidget)
+    
+    # Выполняем расчет для каждого выбранного файла
+    all_results = []
+    for file_path in selected_files:
+        filename = os.path.basename(file_path)
+        self.results_label.setText(f"Расчет параметров для: **{filename}**...")
+        QApplication.processEvents()  # Обновляем UI
+        
+        results, error = taxation_logic.calculate_tree_parameters(
+            file_path,
+            calculate_dbh=calculate_dbh,
+            calculate_height=calculate_height,
+            dbh_height=dbh_height
+        )
+        
+        if error:
+            all_results.append((filename, None, error))
+        elif not results:
+            all_results.append((filename, None, "Расчет не дал результатов"))
         else:
-            result_text += f"- **DBH:** {results['DBH']:.2f} м (на высоте 1.3 м)\n"
-
+            all_results.append((filename, results, None))
+    
+    # Форматирование и вывод результатов
+    result_text = "✅ **Результаты таксации:**\n\n"
+    
+    for filename, results, error in all_results:
+        if error:
+            result_text += f"❌ **{filename}:** {error}\n\n"
+        elif results:
+            result_text += f"📊 **{filename}:**\n"
+            if 'Height' in results and calculate_height:
+                result_text += f"  - Высота: {results['Height']:.2f} м\n"
+            if 'DBH' in results and calculate_dbh:
+                if isinstance(results['DBH'], str):
+                    result_text += f"  - DBH: {results['DBH']} (на высоте {dbh_height:.1f} м)\n"
+                else:
+                    result_text += f"  - DBH: {results['DBH']:.2f} м (на высоте {dbh_height:.1f} м)\n"
+            result_text += "\n"
+    
     self.results_label.setText(result_text)
