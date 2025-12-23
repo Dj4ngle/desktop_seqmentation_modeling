@@ -10,3 +10,7 @@ def get_base_path():
         return os.path.dirname(os.path.abspath(__file__))
 
 base_path = get_base_path()
+
+# Настройка рендерера: "opengl" или "vulkan"
+# Можно переопределить через переменную окружения RENDERER=opengl или RENDERER=vulkan
+RENDERER_BACKEND = os.environ.get('RENDERER', 'opengl').lower()

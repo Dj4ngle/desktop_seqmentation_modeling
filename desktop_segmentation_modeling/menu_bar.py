@@ -21,6 +21,10 @@ class MenuBar:
         findMenu = editMenu.addMenu("Цвет")
         findMenu.addAction(self.selectFromListAction)
         findMenu.addAction(self.createNewColorAction)
+        # Подменю "Рендерер" в меню "Правка"
+        rendererMenu = editMenu.addMenu("Рендерер")
+        rendererMenu.addAction(self.useOpenGLAction)
+        rendererMenu.addAction(self.useVulkanAction)
         # Меню "Помощь"
         helpMenu = menuBar.addMenu("Помощь")
         helpMenu.addAction(self.helpContentAction)
@@ -35,6 +39,11 @@ class MenuBar:
         # Действия в подменю "Цвет"
         self.selectFromListAction = QAction("Выбрать из списка", self.parent)
         self.createNewColorAction = QAction("Создать новый цвет", self.parent)
+        # Действия в подменю "Рендерер"
+        self.useOpenGLAction = QAction("Использовать OpenGL", self.parent)
+        self.useOpenGLAction.setCheckable(True)
+        self.useVulkanAction = QAction("Использовать Vulkan", self.parent)
+        self.useVulkanAction.setCheckable(True)
         # Действия в меню "Помощь"
         self.helpContentAction = QAction("Справочный материал", self.parent)
         self.aboutAction = QAction("О приложении", self.parent)

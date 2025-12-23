@@ -5,6 +5,328 @@ from PyQt6.QtCore import Qt
 import numpy as np
 import open3d as o3d  # Используем Open3D для обработки облаков точек
 import os
+import time
+import logging
+import torch
+from pathlib import Path
+from pyntcloud import PyntCloud
+import desktop_segmentation_modeling
+from desktop_segmentation_modeling.Coordinates.predictmdl.models.pointnet2_cls_ssg import get_model
+import desktop_segmentation_modeling.Coordinates.predictmdl.utils.pointcloud_utils as pcu
+
+# Настройка логирования для измерения производительности
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('taxation_performance.log', encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+performance_logger = logging.getLogger('performance')
+
+
+class PerformanceMeasurement:
+    """
+    Класс для измерения производительности автоматизированной таксации леса.
+    Измеряет время трёх этапов: загрузка данных, инициализация модели, инференс.
+    Сравнивает экспериментальные результаты с теоретическими значениями.
+    
+    Формулы для расчета теоретического времени:
+    
+    1. Загрузка данных:
+       T_load = V_points / B_io
+       где V_points = N_points * bytes_per_point
+    
+    2. Инициализация модели:
+       T_init = T_model_load + T_memory_alloc + T_config
+       где:
+       - T_model_load = (model_params_count * bytes_per_param) / B_io + overhead
+       - T_memory_alloc = (model_params_count * bytes_per_param) / memory_bandwidth + overhead
+       - T_config = overhead
+    
+    3. Инференс:
+       T_inference = (N_points * FLOPs_per_point) / GPU_FLOPS + T_overhead
+       где T_overhead включает передачу данных CPU->GPU и задержки батчей
+    
+    Пример использования:
+        >>> perf = PerformanceMeasurement(model_name='cpl1-1024-rp-s1024-pn2')
+        >>> points, _ = perf.load_data(file_path="data.pcd")
+        >>> perf.initialize_model()  # Реальная загрузка PointNet2
+        >>> results, _ = perf.run_inference(points)  # Реальный инференс
+        >>> summary = perf.print_summary()
+    """
+    
+    def __init__(self, model_name='cpl1-1024-rp-s1024-pn2'):
+        """
+        :param model_name: Имя модели из папки checkpoints (по умолчанию 'cpl1-1024-rp-s1024-pn2')
+        """
+        # Параметры системы (можно настроить под конкретное оборудование)
+        self.bytes_per_point = 12  # 3 координаты (x, y, z) по 4 байта (float32)
+        self.B_io = 50 * 1024 * 1024  # Пропускная способность интерфейса: 50 MB/s
+        
+        # Параметры модели нейросети
+        self.model_name = model_name
+        self.model = None
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model_params_count = None  # Будет рассчитано после загрузки модели
+        self.bytes_per_param = 4  # float32
+        self.memory_bandwidth = 100 * 1024 * 1024 * 1024  # 100 GB/s пропускная способность памяти
+        self.T_model_load_overhead = 0.1  # Накладные расходы на загрузку модели (сек)
+        self.T_memory_alloc_overhead = 0.05  # Накладные расходы на аллокацию памяти (сек)
+        self.T_config_overhead = 0.02  # Накладные расходы на конфигурацию (сек)
+        
+        # Параметры инференса
+        self.FLOPs_per_point = 1000  # Количество операций с плавающей точкой на точку (приблизительно)
+        self.GPU_FLOPS = 10 * 10**12  # 10 TFLOPS производительность GPU (приблизительно)
+        self.sample_points = 2048  # Количество точек для семплирования (FPS)
+        self.CPU_GPU_transfer_overhead = 0.001  # Накладные расходы на передачу батча CPU->GPU (сек)
+        
+        self.results = {}
+
+        torch.set_num_threads(16)
+    
+    def load_data(self, file_path=None, n_points=None):
+        """
+        Этап 1: Загрузка данных.
+        
+        Теоретическое время: T_load = V_points / B_io
+        где V_points = N_points * bytes_per_point
+        
+        :param file_path: Путь к файлу облака точек (опционально)
+        :param n_points: Количество точек для синтетической генерации (если file_path не указан)
+        :return: numpy array с точками, фактическое время загрузки
+        """
+        start_time = time.time()
+        pcd = o3d.io.read_point_cloud(file_path)
+        points = np.asarray(pcd.points)
+        actual_time = time.time() - start_time
+        
+        # Расчет теоретического времени
+        N_points = len(points)
+        V_points = N_points * self.bytes_per_point
+        theoretical_time = V_points / self.B_io
+        
+        # Логирование результатов
+        error = abs(actual_time - theoretical_time) / theoretical_time if theoretical_time > 0 else 0
+        
+        performance_logger.info("=" * 60)
+        performance_logger.info("ЭТАП 1: ЗАГРУЗКА ДАННЫХ")
+        performance_logger.info(f"  Количество точек: {N_points:,}")
+        performance_logger.info(f"  Объём данных: {V_points / (1024**2):.2f} MB")
+        performance_logger.info(f"  Фактическое время: {actual_time:.4f} сек")
+        performance_logger.info("=" * 60)
+        
+        self.results['load'] = {
+            'theoretical_time': theoretical_time,
+            'actual_time': actual_time,
+            'error': error,
+            'n_points': N_points,
+            'data_volume_mb': V_points / (1024**2)
+        }
+        
+        return points, actual_time
+    
+    def farthest_point_sample(self, xyz, npoint):
+        """Farthest Point Sampling для уменьшения количества точек"""
+        device = xyz.device
+        batchsize, ndataset, dimension = xyz.shape
+        centroids = torch.zeros(batchsize, npoint, dtype=torch.long).to(device)
+        distance = torch.ones(batchsize, ndataset).to(device) * 1e10
+        farthest = torch.randint(0, ndataset, (batchsize,), dtype=torch.long).to(device)
+        batch_indices = torch.arange(batchsize, dtype=torch.long).to(device)
+        for i in range(npoint):
+            centroids[:, i] = farthest
+            centroid = xyz[batch_indices, farthest, :].view(batchsize, 1, 3)
+            dist = torch.sum((xyz - centroid) ** 2, -1)
+            mask = dist < distance
+            distance[mask] = dist[mask]
+            farthest = torch.max(distance, -1)[1]
+        return centroids
+
+    def initialize_model(self):
+        """
+        ЭТАП 2: Инициализация нейросети.
+        Выполняется замер трех составляющих согласно математическому описанию.
+        """
+
+        # --- Подготовка (поиск пути) ---
+        package_file = Path(desktop_segmentation_modeling.__file__).resolve()
+        package_dir = package_file.parent
+        model_path = package_dir / 'Coordinates' / 'predictmdl' / 'checkpoints' / self.model_name / 'models' / 'model.t7'
+
+        if not os.path.exists(model_path):
+            checkpoints_dir = package_dir / 'Coordinates' / 'predictmdl' / 'checkpoints'
+            available_models = [d for d in os.listdir(checkpoints_dir) if os.path.isdir(checkpoints_dir / d)]
+            if available_models:
+                self.model_name = available_models[0]
+                model_path = checkpoints_dir / self.model_name / 'models' / 'model.t7'
+
+        model_path_str = str(model_path)
+
+        # 1. t_загр.модели — Время чтения файла с диска
+        t_load_start = time.time()
+        # Загружаем веса в CPU (чистое чтение файла в RAM)
+        state_dict = torch.load(model_path_str, map_location='cpu')
+        t_model_load = time.time() - t_load_start
+
+        # 2. t_аллокация — Время выделения памяти (RAM/VRAM)
+        t_alloc_start = time.time()
+        NUM_CLASSES = 2
+        # Создаем структуру и переносим на целевое устройство (self.device)
+        self.model = get_model(NUM_CLASSES, normal_channel=False).to(self.device)
+        t_allocation = time.time() - t_alloc_start
+
+        # 3. t_конфигурация — Время настройки параметров и графа
+        t_config_start = time.time()
+        # Копируем считанные веса в аллоцированную модель
+        self.model.load_state_dict(state_dict)
+        self.model.eval()
+        t_configuration = time.time() - t_config_start
+
+        # --- Сбор характеристик модели ---
+        # Количество параметров
+        self.model_params_count = sum(p.numel() for p in self.model.parameters())
+        # Вес одного параметра в байтах (element_size)
+        first_param = next(self.model.parameters())
+        bytes_per_param = first_param.element_size()
+        # Общий объем в МБ
+        model_size_mb = (self.model_params_count * bytes_per_param) / (1024 ** 2)
+
+        total_actual_time = t_model_load + t_allocation + t_configuration
+
+        # --- Логирование в стиле вашего скриншота ---
+        performance_logger.info("=" * 60)
+        performance_logger.info("ЭТАП 2: ИНИЦИАЛИЗАЦИЯ НЕЙРОСЕТИ")
+        performance_logger.info(f"  Количество параметров: {self.model_params_count:,}")
+        performance_logger.info(f"  Вес одного параметра: {bytes_per_param} байта(ов)")
+        performance_logger.info(f"  Общий объём модели: {model_size_mb:.2f} MB")
+        performance_logger.info(f"  t_загр.модели (чтение): {t_model_load:.4f} сек")
+        performance_logger.info(f"  t_аллокация (память): {t_allocation:.4f} сек")
+        performance_logger.info(f"  t_конфигурация (настройка): {t_configuration:.4f} сек")
+        performance_logger.info(f"  Фактическое время (итого): {total_actual_time:.4f} сек")
+        performance_logger.info("=" * 60)
+
+        # Сохранение результатов
+        self.results['init'] = {
+            'actual_time': total_actual_time,
+            't_model_load': t_model_load,
+            't_allocation': t_allocation,
+            't_configuration': t_configuration,
+            'model_params': self.model_params_count,
+            'bytes_per_param': bytes_per_param
+        }
+
+        return total_actual_time
+
+    def run_inference(self, points):
+        """
+        ЭТАП 3: ОБРАБОТКА ДАННЫХ (ИНФЕРЕНС)
+        Разделение на Семплирование (FPS) и Чистый Инференс (Forward Pass).
+        """
+        if self.model is None:
+            raise ValueError("Модель не инициализирована. Вызовите initialize_model() сначала.")
+
+        # 0. Старт замера общего времени этапа
+        overall_start = time.time()
+        N_points = len(points)
+
+        # --- Подготовка тензора ---
+        prep_start = time.time()
+        points_batch = np.array([points])
+        points_tensor = torch.Tensor(points_batch).to(self.device)
+        t_prep_tensor = time.time() - prep_start
+
+        # --- 1. t_fps: СЕМПЛИРОВАНИЕ (Подготовка входов) ---
+        # Сложность O(N_points * sample_points)
+        fps_start = time.time()
+        centroids = self.farthest_point_sample(points_tensor, self.sample_points)
+        pc_sampled = points_tensor[0][centroids[0]]
+        t_fps = time.time() - fps_start
+
+        # --- 2. НОРМАЛИЗАЦИЯ (Предобработка) ---
+        norm_start = time.time()
+        pc_sampled_np = pc_sampled.cpu().detach().numpy()
+        X_test = np.array([pc_sampled_np])
+        X_test = pcu.tree_normalize(X_test)
+        data = torch.tensor(X_test, device=self.device).permute(0, 2, 1)
+        t_normalization = time.time() - norm_start
+
+        # --- 3. t_инференс: ЧИСТЫЙ ИНФЕРЕНС (Работа нейросети) ---
+        # Сложность O(sample_points * FLOPs_per_point)
+        inference_start = time.time()
+        with torch.no_grad():
+            logits, _ = self.model(data)
+            # Получаем предсказание (0 - дерево, 1 - фон)
+            preds = logits.max(dim=1)[1].detach().cpu().numpy()
+        t_pure_inference = time.time() - inference_start
+
+        # Итоговое фактическое время
+        total_actual_time = time.time() - overall_start
+
+        # Определение результата
+        pred_value = int(preds.flat[0])
+        prediction = 1 if pred_value == 0 else 0
+
+        # --- Логирование в стиле ЭТАПА 2 ---
+        performance_logger.info("=" * 60)
+        performance_logger.info("ЭТАП 3: ОБРАБОТКА ДАННЫХ (ИНФЕРЕНС)")
+        performance_logger.info(f"  Исходное количество точек (N_от): {N_points:,}")
+        performance_logger.info(f"  Входов нейросети (N_sampled): {self.sample_points:,}")
+        performance_logger.info(f"  Сложность дистанции (C_dist): 9 FLOPs")
+        performance_logger.info(f"  FLOPs на точку инференса: {self.FLOPs_per_point:,}")
+        performance_logger.info("-" * 60)
+        performance_logger.info(f"  t_fps (семплирование):       {t_fps:.4f} сек")
+        performance_logger.info(f"  t_инференс (нейросеть):      {t_pure_inference:.4f} сек")
+        performance_logger.info(f"  Фактическое время (итого):   {total_actual_time:.4f} сек")
+        performance_logger.info("-" * 60)
+        performance_logger.info(f"  Результат распознавания: {'ДЕРЕВО' if prediction == 1 else 'НЕ ДЕРЕВО'}")
+        performance_logger.info("=" * 60)
+
+        # Сохранение для отчета
+        self.results['inference'] = {
+            'actual_time': total_actual_time,
+            't_fps': t_fps,
+            't_pure_inference': t_pure_inference,
+            'n_points': N_points,
+            'sample_points': self.sample_points
+        }
+
+        return prediction, total_actual_time
+    
+    def print_summary(self):
+        """Выводит сводку по всем этапам."""
+        performance_logger.info("\n" + "=" * 60)
+        performance_logger.info("СВОДКА ПО ВСЕМ ЭТАПАМ")
+        performance_logger.info("=" * 60)
+
+        total_actual = sum(r['actual_time'] for r in self.results.values())
+        
+        for stage_name, stage_data in self.results.items():
+            stage_ru = {
+                'load': 'Загрузка данных',
+                'init': 'Инициализация модели',
+                'inference': 'Инференс'
+            }.get(stage_name, stage_name)
+            
+            performance_logger.info(f"\n{stage_ru}:")
+
+            performance_logger.info(f"  Фактическое время: {stage_data['actual_time']:.4f} сек")
+
+
+        
+        performance_logger.info("\n" + "-" * 60)
+        performance_logger.info("ОБЩЕЕ ВРЕМЯ:")
+
+        performance_logger.info(f"  Фактическое: {total_actual:.4f} сек")
+
+        performance_logger.info("=" * 60 + "\n")
+        
+        return {
+
+            'total_actual': total_actual,
+
+        }
 
 
 # TreeTaxationLogic - это класс для реализации таксации
@@ -131,6 +453,11 @@ def taxation_dock_widget(self):
         self.spinbox_dbh_height.setValue(1.3)  # Стандарт 1.3 метра
         params_layout.addWidget(self.spinbox_dbh_height, 3, 1)
 
+        # Чекбокс для измерения производительности
+        self.checkbox_performance = QCheckBox("Измерить производительность")
+        self.checkbox_performance.setChecked(False)
+        params_layout.addWidget(self.checkbox_performance, 4, 0)
+
         layout.addLayout(params_layout)
 
         # 3. Кнопка расчета
@@ -171,6 +498,42 @@ def taxation_dock_widget(self):
     return self.dock_widgets['taxation']
 
 
+def run_performance_measurement(file_path=None, n_points=None, model_name='cpl1-1024-rp-s1024-pn2'):
+    """
+    Отдельная функция для запуска измерения производительности.
+    Может использоваться независимо от GUI для тестирования и анализа.
+    
+    :param file_path: Путь к файлу облака точек (опционально)
+    :param n_points: Количество точек для синтетической генерации (если file_path не указан)
+    :param model_name: Имя модели из папки checkpoints
+    :return: словарь с результатами измерения производительности
+    """
+    perf_measurement = PerformanceMeasurement(model_name=model_name)
+    
+    performance_logger.info("\n" + "=" * 60)
+    performance_logger.info("НАЧАЛО ИЗМЕРЕНИЯ ПРОИЗВОДИТЕЛЬНОСТИ")
+    performance_logger.info("=" * 60)
+    
+    # Этап 1: Загрузка данных
+    points, _ = perf_measurement.load_data(file_path=file_path, n_points=n_points)
+    
+    # Этап 2: Инициализация модели
+    perf_measurement.initialize_model()
+    
+    # Этап 3: Инференс
+    inference_results, _ = perf_measurement.run_inference(points)
+    
+    # Вывод сводки
+    summary = perf_measurement.print_summary()
+    
+    return {
+        'measurement': perf_measurement,
+        'summary': summary,
+        'results': perf_measurement.results,
+        'inference_results': inference_results
+    }
+
+
 def run_taxation_calculation(self):
     """
     Выполняет логику расчета таксации при нажатии на кнопку.
@@ -195,6 +558,30 @@ def run_taxation_calculation(self):
     calculate_dbh = self.checkbox_dbh.isChecked()
     calculate_height = self.checkbox_height.isChecked()
     dbh_height = self.spinbox_dbh_height.value()  # Получаем высоту DBH
+    measure_performance = self.checkbox_performance.isChecked() if hasattr(self, 'checkbox_performance') else False
+
+    # Измерение производительности (если включено)
+    perf_measurement = None
+    if measure_performance:
+        perf_measurement = PerformanceMeasurement()
+        performance_logger.info("\n" + "=" * 60)
+        performance_logger.info("НАЧАЛО ИЗМЕРЕНИЯ ПРОИЗВОДИТЕЛЬНОСТИ")
+        performance_logger.info("=" * 60)
+        
+        # Этап 1: Загрузка данных
+        # Используем первый выбранный файл для измерения
+        if selected_files:
+            first_file = selected_files[0]
+            points, _ = perf_measurement.load_data(file_path=first_file)
+            
+            # Этап 2: Инициализация модели
+            perf_measurement.initialize_model()
+            
+            # Этап 3: Инференс
+            inference_results, _ = perf_measurement.run_inference(points)
+            
+            # Вывод сводки
+            perf_measurement.print_summary()
 
     # Обновляем логику для использования dbh_height
     # Создаем временный класс или обновляем существующий
@@ -273,5 +660,17 @@ def run_taxation_calculation(self):
                 else:
                     result_text += f"  - DBH: {results['DBH']:.2f} м (на высоте {dbh_height:.1f} м)\n"
             result_text += "\n"
+    
+    # Добавляем информацию о производительности, если измерение было включено
+    if measure_performance and perf_measurement:
+        perf_text = f"\n\n⏱️ **Производительность:**\n"
+        perf_text += f"  Общее время (теор.): {perf_measurement.results.get('load', {}).get('theoretical_time', 0) + perf_measurement.results.get('init', {}).get('theoretical_time', 0) + perf_measurement.results.get('inference', {}).get('theoretical_time', 0):.4f} сек\n"
+        perf_text += f"  Общее время (факт.): {perf_measurement.results.get('load', {}).get('actual_time', 0) + perf_measurement.results.get('init', {}).get('actual_time', 0) + perf_measurement.results.get('inference', {}).get('actual_time', 0):.4f} сек\n"
+        total_theoretical = sum(r.get('theoretical_time', 0) for r in perf_measurement.results.values())
+        total_actual = sum(r.get('actual_time', 0) for r in perf_measurement.results.values())
+        total_error = abs(total_actual - total_theoretical) / total_theoretical if total_theoretical > 0 else 0
+        perf_text += f"  Относительная ошибка: {total_error * 100:.2f}%\n"
+        perf_text += f"  📄 Подробности в файле: taxation_performance.log"
+        result_text += perf_text
     
     self.results_label.setText(result_text)

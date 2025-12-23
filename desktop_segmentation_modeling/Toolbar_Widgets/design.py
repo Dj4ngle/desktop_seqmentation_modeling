@@ -4,8 +4,8 @@ from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtWidgets import (QHBoxLayout, QListWidget, QDockWidget,QListWidgetItem, QCheckBox, QVBoxLayout, QWidget, QPushButton)
 
 from desktop_segmentation_modeling.Toolbar_Widgets import coordinates, segmentation, ground_extraction, modeling, \
-    taxation
-from desktop_segmentation_modeling.point_cloud_widget import OpenGLWidget
+    taxation, benchmark
+from desktop_segmentation_modeling.point_cloud_widget import create_point_cloud_widget
 from PyQt6.QtCore import Qt
 
 # Пример!!!
@@ -24,7 +24,7 @@ class Ui_MainWindow(object):
         self.centralLayout = QVBoxLayout(self.centralwidget)
         self.centralLayout.setContentsMargins(0, 0, 0, 0)  # Убираем отступы
         
-        self.openGLWidget = OpenGLWidget(parent=self.centralwidget)
+        self.openGLWidget = create_point_cloud_widget(parent=self.centralwidget)
         self.openGLWidget.setObjectName("openGLWidget")
         self.centralLayout.addWidget(self.openGLWidget)
         
@@ -50,6 +50,7 @@ class Ui_MainWindow(object):
             'taxation': taxation.taxation_dock_widget(self),
             'modeling': modeling.modeling_dock_widget(self),
             'coordinates': coordinates.coordinates_dock_widget(self),
+            'benchmark': benchmark.benchmark_dock_widget(self),
 
             # Пример!!!
             # 'example': example_widget.example_dock_widget(self)  # ← наш виджет

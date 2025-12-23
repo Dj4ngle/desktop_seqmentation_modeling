@@ -19,6 +19,7 @@ class ToolBar:
         editToolBar.addAction(self.taxationAction)
         editToolBar.addAction(self.modelingAction)
         editToolBar.addAction(self.coordinatesAction)
+        editToolBar.addAction(self.benchmarkAction)
 
         # Пример!!!
         # editToolBar.addAction(self.exampleAction)  # ← добавили
@@ -42,6 +43,7 @@ class ToolBar:
         self.taxationAction = QAction(QIcon(os.path.join(base_path, "images/taxation.png")), "Таксация", self.parent)
         self.modelingAction = QAction(QIcon(os.path.join(base_path, "images/modeling.png")), "Моделирование", self.parent)
         self.coordinatesAction = QAction(QIcon(os.path.join(base_path, "images/coordinates.png")), "Координаты", self.parent)
+        self.benchmarkAction = QAction(QIcon(os.path.join(base_path, "images/modeling.png")), "Бенчмарк", self.parent)
 
         # Пример!!!
         # self.exampleAction = QAction(

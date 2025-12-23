@@ -190,3 +190,42 @@ QComboBox QAbstractItemView::item:selected {
     background-color: #52525a;   /* Цвет фона выбранного элемента */
     color: #CCCEDB;
 }
+
+QProgressBar {
+    background-color: #494950;
+    border: 2px solid #494950;
+    border-radius: 5px;
+    text-align: center;
+    color: #CCCEDB;
+    height: 20px;
+}
+
+QProgressBar::chunk {
+    background-color: #1E88E5;
+    border-radius: 3px;
+}
+
+QTextEdit {
+    background-color: #3F3F46;
+    color: #CCCEDB;
+    border: 2px solid #494950;
+    border-radius: 5px;
+    padding: 5px;
+}
+
+QGroupBox {
+    background-color: #494950;
+    color: #CCCEDB;
+    border: 2px solid #494950;
+    border-radius: 5px;
+    margin-top: 10px;
+    padding-top: 10px;
+    font-weight: bold;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 5px;
+    background-color: #494950;
+}

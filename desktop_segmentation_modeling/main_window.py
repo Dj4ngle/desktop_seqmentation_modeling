@@ -11,6 +11,7 @@ from .Toolbar_Widgets.design import Ui_MainWindow
 from .Toolbar_Widgets.console_manager import ConsoleManager
 from .menu_bar import MenuBar
 from .Toolbar.tool_bar import ToolBar
+from desktop_segmentation_modeling.point_cloud_widget import create_point_cloud_widget
 import pylas
 
 class MyMainWindow(QMainWindow, Ui_MainWindow):
@@ -44,6 +45,132 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         # Подключаем обработчики событий для элементов меню и панели инструментов
         self.menuCreator.openAction.triggered.connect(self.select_files)
         self.menuCreator.saveAction.triggered.connect(self.save_selected_tree)
+        # Подключаем обработчики для переключения рендерера
+        self.menuCreator.useOpenGLAction.triggered.connect(lambda: self.switch_renderer('opengl'))
+        self.menuCreator.useVulkanAction.triggered.connect(lambda: self.switch_renderer('vulkan'))
+
+        # Устанавливаем начальное состояние меню в зависимости от текущего рендерера
+        self._update_renderer_menu_state()
+
+    def _update_renderer_menu_state(self):
+        """Обновляет состояние пунктов меню в зависимости от текущего рендерера"""
+        from desktop_segmentation_modeling.point_cloud_widget import OpenGLWidget
+        is_opengl = isinstance(self.openGLWidget, OpenGLWidget)
+
+        self.menuCreator.useOpenGLAction.setChecked(is_opengl)
+        self.menuCreator.useVulkanAction.setChecked(not is_opengl)
+
+    def switch_renderer(self, backend):
+        """
+        Переключение между OpenGL и Vulkan рендерерами.
+
+        Args:
+            backend: 'opengl' или 'vulkan'
+        """
+        backend = backend.lower()
+
+        # Проверяем, не переключаемся ли на тот же рендерер
+        from desktop_segmentation_modeling.point_cloud_widget import OpenGLWidget
+        current_is_opengl = isinstance(self.openGLWidget, OpenGLWidget)
+        if (backend == 'opengl' and current_is_opengl) or (backend == 'vulkan' and not current_is_opengl):
+            return  # Уже используется нужный рендерер
+
+        if backend == 'vulkan':
+            try:
+                from desktop_segmentation_modeling.point_cloud_widget import VULKAN_AVAILABLE
+                if not VULKAN_AVAILABLE:
+                    print("Vulkan недоступен. Установите: pip install vulkan")
+                    self._update_renderer_menu_state()
+                    return
+            except:
+                print("Vulkan недоступен. Установите: pip install vulkan")
+                self._update_renderer_menu_state()
+                return
+
+        print(f"Переключение на {backend.upper()} рендерер...")
+
+        # Сохраняем текущее состояние виджета
+        old_widget = self.openGLWidget
+
+        # Сохраняем параметры вида
+        scale_factor = old_widget.scale_factor
+        rotation_x = old_widget.rotation_x
+        rotation_y = old_widget.rotation_y
+        rotation_z = old_widget.rotation_z
+        point_cloud_position = old_widget.point_cloud_position
+
+        # Сохраняем загруженные данные
+        point_clouds_data = {}
+        models_data = {}
+
+        # Для OpenGL виджета
+        if hasattr(old_widget, 'vbo_data'):
+            for filename, cloud_info in old_widget.point_clouds.items():
+                if cloud_info.get('full_data') is not None:
+                    point_clouds_data[filename] = {
+                        'full_data': cloud_info['full_data'],
+                        'active': cloud_info.get('active', False)
+                    }
+
+        if hasattr(old_widget, 'vbo_data_models'):
+            for filename, model_info in old_widget.models.items():
+                if model_info.get('data') is not None:
+                    models_data[filename] = {
+                        'data': model_info.get('data'),
+                        'active': model_info.get('active', False),
+                        'num_polygons': model_info.get('num_polygons', 0)
+                    }
+
+        # Создаем новый виджет с нужным рендерером
+        new_widget = create_point_cloud_widget(backend=backend, parent=self.centralwidget)
+        new_widget.setObjectName("openGLWidget")
+
+        # Восстанавливаем параметры вида
+        new_widget.scale_factor = scale_factor
+        new_widget.rotation_x = rotation_x
+        new_widget.rotation_y = rotation_y
+        new_widget.rotation_z = rotation_z
+        new_widget.point_cloud_position = point_cloud_position
+
+        # Заменяем виджет в layout
+        self.centralLayout.removeWidget(old_widget)
+        old_widget.setParent(None)
+        old_widget.deleteLater()
+
+        self.centralLayout.addWidget(new_widget)
+
+        self.openGLWidget = new_widget
+
+        # Перезагружаем облака точек и модели
+        for filename, data in point_clouds_data.items():
+            try:
+                # Пытаемся загрузить из файла, если путь существует
+                if os.path.exists(filename):
+                    new_widget.load_point_cloud(filename)
+                    if not data.get('active', True):
+                        new_widget.point_clouds[filename]['active'] = False
+                else:
+                    # Если файл не существует, создаем временный файл или пропускаем
+                    print(f"Файл {filename} не найден, пропускаем при переключении рендерера")
+            except Exception as e:
+                print(f"Ошибка при загрузке {filename}: {e}")
+
+        for filename, data in models_data.items():
+            try:
+                if os.path.exists(filename):
+                    new_widget.load_model(filename)
+                    if not data.get('active', True):
+                        new_widget.models[filename]['active'] = False
+                else:
+                    print(f"Файл модели {filename} не найден, пропускаем при переключении рендерера")
+            except Exception as e:
+                print(f"Ошибка при загрузке модели {filename}: {e}")
+
+        # Обновляем состояние меню
+        self._update_renderer_menu_state()
+
+        print(f"Переключение на {backend.upper()} завершено.")
+
         self.menuCreator.exitAction.triggered.connect(QApplication.instance().quit)
         self.toolbarsCreator.earthExtractionAction.triggered.connect(lambda:
                                                                      self.toggle_dock_widget('ground_extraction',
@@ -66,6 +193,9 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.toolbarsCreator.coordinatesAction.triggered.connect(lambda:
                                                               self.toggle_dock_widget('coordinates',
                                                                                       Qt.DockWidgetArea.LeftDockWidgetArea))
+        self.toolbarsCreator.benchmarkAction.triggered.connect(lambda:
+                                                               self.toggle_dock_widget('benchmark',
+                                                                                       Qt.DockWidgetArea.LeftDockWidgetArea))
 
         # Пример!!!
         # self.toolbarsCreator.exampleAction.triggered.connect(
