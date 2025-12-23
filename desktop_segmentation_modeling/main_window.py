@@ -59,6 +59,43 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
         self.menuCreator.useOpenGLAction.setChecked(is_opengl)
         self.menuCreator.useVulkanAction.setChecked(not is_opengl)
+    
+    def _update_dock_widgets_references(self):
+        """Обновляет ссылки на openGLWidget во всех dock виджетах"""
+        # Проверяем, что openGLWidget существует
+        if not hasattr(self, 'openGLWidget') or self.openGLWidget is None:
+            print("Предупреждение: openGLWidget не установлен при обновлении ссылок")
+            return
+        
+        # Обновляем taxation_logic, если он существует
+        if hasattr(self, 'taxation_logic') and hasattr(self.taxation_logic, 'openGLWidget'):
+            self.taxation_logic.openGLWidget = self.openGLWidget
+        
+        # Обновляем ссылки в виджетах, которые хранят ссылку на openGLWidget
+        for dock_name, dock_widget in self.dock_widgets.items():
+            if dock_widget is None:
+                continue
+                
+            widget = dock_widget.widget()
+            if widget:
+                # Обновляем ссылку в виджете, если она есть
+                if hasattr(widget, 'opengl_widget'):
+                    widget.opengl_widget = self.openGLWidget
+                
+                # Для benchmark виджета
+                if hasattr(widget, 'benchmark_controller'):
+                    # Обновляем ссылку на opengl_widget в контроллере
+                    if hasattr(widget.benchmark_controller, 'opengl_widget'):
+                        widget.benchmark_controller.opengl_widget = self.openGLWidget
+                    # Обновляем ссылку на монитор производительности в новом виджете
+                    if hasattr(widget.benchmark_controller, 'monitor'):
+                        self.openGLWidget.performance_monitor = widget.benchmark_controller.monitor
+                        # Убеждаемся, что monitor имеет ссылку на controller
+                        if not hasattr(widget.benchmark_controller.monitor, 'benchmark_controller'):
+                            widget.benchmark_controller.monitor.benchmark_controller = widget.benchmark_controller
+                
+                # Для taxation виджета - обновляем через self.taxation_logic
+                # (taxation_logic создается в taxation_dock_widget и хранится в self)
 
     def switch_renderer(self, backend):
         """
@@ -140,6 +177,26 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.centralLayout.addWidget(new_widget)
 
         self.openGLWidget = new_widget
+        
+        # Убеждаемся, что новый виджет активен и получает события
+        new_widget.setEnabled(True)
+        new_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        new_widget.setMouseTracking(True)
+        
+        # Обновляем ссылки на openGLWidget во всех dock виджетах
+        self._update_dock_widgets_references()
+        
+        # Принудительно обновляем виджет и даем ему фокус
+        new_widget.update()
+        new_widget.setFocus()
+        
+        # Убеждаемся, что центральный виджет тоже активен
+        self.centralwidget.setEnabled(True)
+        
+        # Обновляем состояние меню после переключения
+        self._update_renderer_menu_state()
+        
+        print(f"Переключение на {backend.upper()} завершено. openGLWidget: {type(self.openGLWidget).__name__}")
 
         # Перезагружаем облака точек и модели
         for filename, data in point_clouds_data.items():
@@ -168,6 +225,10 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
         # Обновляем состояние меню
         self._update_renderer_menu_state()
+        
+        # Принудительно обновляем виджет, чтобы он отобразился
+        new_widget.update()
+        new_widget.show()
 
         print(f"Переключение на {backend.upper()} завершено.")
 
@@ -205,12 +266,13 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         #     )
         # )
 
-        self.toolbarsCreator.frontViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(1, 1, 1))
-        self.toolbarsCreator.backViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(1, 180, 1))
-        self.toolbarsCreator.leftSideViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(1, 90, 1))
-        self.toolbarsCreator.rightSideViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(1, 270, 1))
-        self.toolbarsCreator.topViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(90, 1, 1))
-        self.toolbarsCreator.bottomViewAction.triggered.connect(lambda: self.openGLWidget.set_view_parameters(270, 1, 1))
+        # Используем методы вместо lambda, чтобы всегда использовалась актуальная ссылка на openGLWidget
+        self.toolbarsCreator.frontViewAction.triggered.connect(self._set_front_view)
+        self.toolbarsCreator.backViewAction.triggered.connect(self._set_back_view)
+        self.toolbarsCreator.leftSideViewAction.triggered.connect(self._set_left_view)
+        self.toolbarsCreator.rightSideViewAction.triggered.connect(self._set_right_view)
+        self.toolbarsCreator.topViewAction.triggered.connect(self._set_top_view)
+        self.toolbarsCreator.bottomViewAction.triggered.connect(self._set_bottom_view)
 
         # Подключаем кнопку и обработчик
         self.select_all_button.clicked.connect(self.toggle_select_all)
@@ -383,7 +445,37 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                     widget.setParent(None)
 
     def toggle_dock_widget(self, dock_widget_name, dock_area):
+        # Проверяем, что openGLWidget существует
+        if not hasattr(self, 'openGLWidget') or self.openGLWidget is None:
+            print("Ошибка: openGLWidget не установлен")
+            return
+        
+        # Проверяем, что dock_widgets инициализированы
+        if not hasattr(self, 'dock_widgets') or len(self.dock_widgets) == 0:
+            print("Инициализируем dock виджеты...")
+            if hasattr(self, 'init_dock_widgets'):
+                self.init_dock_widgets()
+                # После инициализации обновляем ссылки
+                self._update_dock_widgets_references()
+            else:
+                print("Ошибка: метод init_dock_widgets не найден")
+                return
+        
         dock_widget = self.dock_widgets.get(dock_widget_name)
+        if dock_widget is None:
+            print(f"Ошибка: виджет '{dock_widget_name}' не найден в dock_widgets")
+            print(f"Доступные виджеты: {list(self.dock_widgets.keys())}")
+            # Попробуем пересоздать виджеты
+            print("Попытка пересоздать виджеты...")
+            self.init_dock_widgets()
+            self._update_dock_widgets_references()
+            dock_widget = self.dock_widgets.get(dock_widget_name)
+            if dock_widget is None:
+                return
+        
+        # Обновляем ссылки на openGLWidget перед открытием виджета
+        self._update_dock_widgets_references()
+        
         # Сначала проверяем, открыт ли данный виджет
         if dock_widget.isVisible():
             # Если виджет уже открыт и видим, просто его скрываем
@@ -391,10 +483,30 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         else:
             # Если виджет закрыт, скрываем все остальные виджеты
             for widget in self.dock_widgets.values():
-                widget.hide()
+                if widget and widget.isVisible():
+                    widget.hide()
+            
             # И отображаем нужный виджет
-            self.addDockWidget(dock_area, dock_widget)
-            dock_widget.show()
+            try:
+                # Убеждаемся, что виджет не добавлен в другой dock area
+                if dock_widget.parent() is not None:
+                    dock_widget.setParent(None)
+                
+                self.addDockWidget(dock_area, dock_widget)
+                dock_widget.show()
+                
+                # Принудительно обновляем виджет, чтобы убедиться, что он виден
+                dock_widget.raise_()
+                dock_widget.activateWindow()
+                
+                # Еще раз обновляем ссылки после показа виджета
+                self._update_dock_widgets_references()
+                
+                print(f"Виджет '{dock_widget_name}' открыт. openGLWidget: {type(self.openGLWidget).__name__}")
+            except Exception as e:
+                print(f"Ошибка при открытии виджета '{dock_widget_name}': {e}")
+                import traceback
+                traceback.print_exc()
 
     def save_selected_tree(self):
         selected_files = []
@@ -476,4 +588,34 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
                 else:
                     print(f"Неподдерживаемый формат файла: {file_path}")
+    
+    def _set_front_view(self):
+        """Устанавливает вид спереди"""
+        if hasattr(self, 'openGLWidget') and self.openGLWidget is not None:
+            self.openGLWidget.set_view_parameters(1, 1, 1)
+    
+    def _set_back_view(self):
+        """Устанавливает вид сзади"""
+        if hasattr(self, 'openGLWidget') and self.openGLWidget is not None:
+            self.openGLWidget.set_view_parameters(1, 180, 1)
+    
+    def _set_left_view(self):
+        """Устанавливает вид слева"""
+        if hasattr(self, 'openGLWidget') and self.openGLWidget is not None:
+            self.openGLWidget.set_view_parameters(1, 90, 1)
+    
+    def _set_right_view(self):
+        """Устанавливает вид справа"""
+        if hasattr(self, 'openGLWidget') and self.openGLWidget is not None:
+            self.openGLWidget.set_view_parameters(1, 270, 1)
+    
+    def _set_top_view(self):
+        """Устанавливает вид сверху"""
+        if hasattr(self, 'openGLWidget') and self.openGLWidget is not None:
+            self.openGLWidget.set_view_parameters(90, 1, 1)
+    
+    def _set_bottom_view(self):
+        """Устанавливает вид снизу"""
+        if hasattr(self, 'openGLWidget') and self.openGLWidget is not None:
+            self.openGLWidget.set_view_parameters(270, 1, 1)
         

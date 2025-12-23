@@ -64,12 +64,18 @@ class PerformanceMonitor(QObject):
         current_time = time.time()
         delta_time = current_time - self.last_frame_time
         
-        # Определяем текущий этап (0-3)
-        stage = int(elapsed_time / 5.0)
-        if stage > 3:
-            stage = 3
-        self.current_stage = stage
+        # Определяем текущий этап (0-3) на основе elapsed_time
+        # Если elapsed_time == 0, используем последний известный этап
+        if elapsed_time > 0:
+            stage = int(elapsed_time / 5.0)
+            if stage > 3:
+                stage = 3
+            self.current_stage = stage
+        else:
+            # Если elapsed_time не передан, используем текущий этап
+            stage = self.current_stage
         
+        # Записываем FPS только если прошло достаточно времени
         if delta_time > 0:
             fps = 1.0 / delta_time
             self.fps_history.append(fps)
@@ -178,6 +184,8 @@ class BenchmarkController(QObject):
         self.opengl_widget = opengl_widget
         self.duration = duration  # Длительность бенчмарка в секундах
         self.monitor = PerformanceMonitor()
+        # Добавляем ссылку на контроллер в монитор для доступа к elapsed_time
+        self.monitor.benchmark_controller = self
         
         self.timer = QTimer()
         self.timer.timeout.connect(self._update_benchmark)
@@ -248,11 +256,14 @@ class BenchmarkController(QObject):
         current_time = time.time()
         self.elapsed_time = current_time - self.start_time
         
-        # Записываем метрики с информацией о времени
-        self.monitor.record_frame(self.elapsed_time)
+        # НЕ записываем метрики здесь - они записываются в paintGL/paintEvent при реальной отрисовке
+        # Здесь только обновляем elapsed_time для определения этапа
         
         # Выполняем действия
         self._perform_actions(self.elapsed_time)
+        
+        # Обновляем виджет - это вызовет paintGL/paintEvent, где записываются метрики
+        self.opengl_widget.update()
         
         # Обновляем прогресс
         progress = (self.elapsed_time / self.duration) * 100.0
@@ -324,8 +335,8 @@ class BenchmarkController(QObject):
                 self.initial_position.y() + pan_y
             )
         
-        # Обновляем виджет
-        self.opengl_widget.update()
+        # НЕ вызываем update() здесь - он вызывается в _update_benchmark()
+        # чтобы избежать двойного вызова paintGL/paintEvent
     
     def save_results(self, filename=None):
         """Сохраняет результаты бенчмарка в JSON файл."""

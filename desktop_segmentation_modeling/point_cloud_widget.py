@@ -40,6 +40,11 @@ class OpenGLWidget(QOpenGLWidget):
 
         # Ссылка на монитор производительности (устанавливается из бенчмарка)
         self.performance_monitor = None
+        
+        # Убеждаемся, что виджет может получать события мыши и клавиатуры
+        self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setEnabled(True)
 
 
     def load_point_cloud(self, filename):
@@ -226,11 +231,23 @@ class OpenGLWidget(QOpenGLWidget):
 
         glDisableClientState(GL_VERTEX_ARRAY)
         glPopMatrix()
+        
         # Записываем метрики производительности, если монитор установлен
         if self.performance_monitor is not None:
-            self.performance_monitor.record_frame()
+            # Получаем elapsed_time из benchmark_controller, если он существует и бенчмарк запущен
+            elapsed_time = 0.0
+            if hasattr(self.performance_monitor, 'benchmark_controller'):
+                controller = self.performance_monitor.benchmark_controller
+                # Проверяем, что контроллер существует и бенчмарк запущен
+                if controller is not None and hasattr(controller, 'is_running') and controller.is_running:
+                    if hasattr(controller, 'elapsed_time'):
+                        elapsed_time = controller.elapsed_time
+            # Записываем метрики всегда, если монитор установлен
+            # record_frame определит этап на основе elapsed_time (или использует текущий этап)
+            self.performance_monitor.record_frame(elapsed_time)
 
-        self.update()
+        # НЕ вызываем self.update() здесь, чтобы избежать бесконечного цикла
+        # update() вызывается из benchmark_controller._perform_actions()
 
     def set_scale_factor(self, scale):
         self.scale_factor = scale
@@ -522,8 +539,16 @@ if VULKAN_AVAILABLE:
                 raise RuntimeError(f"Failed to create buffer: {e}") from e
 
         def _update_buffer_data(self, buffer, memory, data):
-            """Обновление данных в буфере (Исправленная упрощенная версия)"""
+            """Обновление данных в буфере (Исправленная версия с поддержкой C-contiguous)"""
             import ctypes
+
+            # Убеждаемся, что данные являются C-contiguous массивом
+            if isinstance(data, np.ndarray):
+                if not data.flags['C_CONTIGUOUS']:
+                    data = np.ascontiguousarray(data, dtype=data.dtype)
+            else:
+                # Если это не numpy массив, конвертируем
+                data = np.ascontiguousarray(data, dtype=np.float32)
 
             data_size = data.nbytes
 
@@ -532,28 +557,20 @@ if VULKAN_AVAILABLE:
 
             try:
                 # 2. Пытаемся получить "сырой" адрес памяти (int)
-                # Если у объекта есть атрибут .value (как у c_void_p), берем его.
-                # Если нет, берем сам объект (на случай, если это уже int).
                 ptr_address = getattr(mapped_ptr, "value", mapped_ptr)
 
                 # 3. Выбираем способ копирования
                 if isinstance(ptr_address, int):
-                    # ПУТЬ А: У нас есть адрес памяти (int).
-                    # Это самый надежный способ. memmove пишет байты прямо по адресу.
-
-                    # Получаем адрес источника (если это numpy массив) или сам объект
-                    src = data.ctypes.data if hasattr(data, "ctypes") else data
-                    ctypes.memmove(ptr_address, src, data_size)
+                    # ПУТЬ А: У нас есть адрес памяти (int) - используем memmove
+                    src = data.ctypes.data_as(ctypes.POINTER(ctypes.c_byte))
+                    dst = ctypes.cast(ptr_address, ctypes.POINTER(ctypes.c_byte))
+                    ctypes.memmove(dst, src, data_size)
 
                 else:
-                    # ПУТЬ Б: mapped_ptr - это буферный объект (например, CFFI buffer), а не адрес.
-                    # memmove его не принял, поэтому используем memoryview.
-
-                    # .cast('B') критически важен: он превращает данные в плоский массив байтов,
-                    # игнорируя типы float/int и разницу в структурах.
+                    # ПУТЬ Б: mapped_ptr - это буферный объект - используем memoryview
+                    # Убеждаемся, что данные C-contiguous перед созданием memoryview
                     dst_mv = memoryview(mapped_ptr).cast('B')
                     src_mv = memoryview(data).cast('B')
-
                     dst_mv[:data_size] = src_mv[:data_size]
 
             finally:
@@ -653,9 +670,9 @@ if VULKAN_AVAILABLE:
 
             points_centered = points - np.mean(points, axis=0)
 
-            # Создание GPU-буферов
-            points_data = np.array(points_centered, dtype=np.float32)
-            colors_data = np.array(colors, dtype=np.float32)
+            # Создание GPU-буферов с C-contiguous данными
+            points_data = np.ascontiguousarray(points_centered, dtype=np.float32)
+            colors_data = np.ascontiguousarray(colors, dtype=np.float32)
 
             vertex_buffer, vertex_memory = self._create_buffer(
                 points_data.nbytes,
@@ -807,6 +824,85 @@ if VULKAN_AVAILABLE:
 
             vk.vkEndCommandBuffer(command_buffer)
 
+        def _apply_transformations(self, points):
+            """Применяет трансформации (масштаб, поворот, перенос) к точкам"""
+            if len(points) == 0:
+                return points
+            
+            import math
+            
+            # Конвертируем точки в однородные координаты (x, y, z, 1)
+            if points.shape[1] == 3:
+                homogeneous_points = np.ones((len(points), 4), dtype=np.float32)
+                homogeneous_points[:, :3] = points
+            else:
+                homogeneous_points = points.copy()
+            
+            # Матрица масштабирования
+            scale = self.scale_factor
+            scale_matrix = np.array([
+                [scale, 0, 0, 0],
+                [0, scale, 0, 0],
+                [0, 0, scale, 0],
+                [0, 0, 0, 1]
+            ], dtype=np.float32)
+            
+            # Матрицы поворота
+            rx = math.radians(self.rotation_x)
+            ry = math.radians(self.rotation_y)
+            rz = math.radians(self.rotation_z)
+            
+            cos_x, sin_x = math.cos(rx), math.sin(rx)
+            cos_y, sin_y = math.cos(ry), math.sin(ry)
+            cos_z, sin_z = math.cos(rz), math.sin(rz)
+            
+            rot_x = np.array([
+                [1, 0, 0, 0],
+                [0, cos_x, -sin_x, 0],
+                [0, sin_x, cos_x, 0],
+                [0, 0, 0, 1]
+            ], dtype=np.float32)
+            
+            rot_y = np.array([
+                [cos_y, 0, sin_y, 0],
+                [0, 1, 0, 0],
+                [-sin_y, 0, cos_y, 0],
+                [0, 0, 0, 1]
+            ], dtype=np.float32)
+            
+            rot_z = np.array([
+                [cos_z, -sin_z, 0, 0],
+                [sin_z, cos_z, 0, 0],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1]
+            ], dtype=np.float32)
+            
+            # Матрица переноса
+            tx = self.point_cloud_position.x()
+            ty = -self.point_cloud_position.y()
+            translate_matrix = np.array([
+                [1, 0, 0, tx],
+                [0, 1, 0, ty],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1]
+            ], dtype=np.float32)
+            
+            # Комбинированная матрица модели
+            # В OpenGL порядок вызова: glScale -> glTranslate -> glRotate
+            # OpenGL применяет матрицы справа налево, поэтому фактический порядок: Rz * Ry * Rx * T * S
+            # В матричном виде для применения к точкам: S * T * Rx * Ry * Rz
+            # Но так как мы применяем к точкам (point' = M * point), нужен порядок: S * T * Rx * Ry * Rz
+            # Однако для соответствия визуализации в OpenGL используем тот же порядок
+            # Порядок: Scale -> Translate -> Rotate (Rx, Ry, Rz)
+            # В матричном виде: Rz * Ry * Rx * T * S (применяется к точкам)
+            model_matrix = rot_z @ rot_y @ rot_x @ translate_matrix @ scale_matrix
+            
+            # Применяем трансформацию ко всем точкам
+            transformed = (model_matrix @ homogeneous_points.T).T
+            
+            # Возвращаем только x, y, z (убираем w)
+            return transformed[:, :3]
+        
         def _update_uniform_buffer(self):
             """Обновление uniform буфера с матрицами трансформации"""
             # Вычисление матриц трансформации
@@ -868,42 +964,94 @@ if VULKAN_AVAILABLE:
             if self.uniform_buffer and self.uniform_memory:
                 # Комбинированная MVP матрица
                 mvp = self.projection_matrix @ self.view_matrix @ self.model_matrix
-                self._update_buffer_data(self.uniform_buffer, self.uniform_memory, mvp.flatten())
+                # Убеждаемся, что матрица C-contiguous перед передачей
+                mvp_flat = np.ascontiguousarray(mvp.flatten(), dtype=np.float32)
+                self._update_buffer_data(self.uniform_buffer, self.uniform_memory, mvp_flat)
 
         def paintEvent(self, event):
             """
             Обработка события отрисовки.
-
-            Примечание: Для полной реализации Vulkan рендеринга требуется:
-            1. Интеграция с QVulkanWindow для получения swapchain и framebuffers
-            2. Создание render pass и graphics pipeline
-            3. Создание и управление framebuffers
-            4. Синхронизация (semaphores, fences)
-
-            Текущая реализация предоставляет инфраструктуру для:
-            - Создания и управления GPU-буферами
-            - Загрузки данных в GPU-память
-            - Записи команд отрисовки в командные буферы
-
-            Для использования в реальном приложении рекомендуется:
-            - Использовать QVulkanWindow как базовый класс
-            - Или интегрировать с существующим Vulkan контекстом через QVulkanInstance
+            
+            Примечание: Vulkan требует сложной настройки swapchain, framebuffers и pipeline.
+            Для упрощения используем QPainter для базовой отрисовки, пока не будет полной реализации Vulkan.
             """
+            from PyQt6.QtGui import QPainter, QColor, QPen
+            from PyQt6.QtCore import QPointF
+            
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            
+            # Черный фон
+            painter.fillRect(self.rect(), QColor(0, 0, 0))
+            
             # Обновление uniform буфера с текущими трансформациями
             self._update_uniform_buffer()
-
-            # Создание и запись командного буфера
+            
+            # Простая отрисовка точек через QPainter (временное решение)
+            # В реальной реализации здесь должен быть полный Vulkan рендеринг
+            painter.setPen(QPen(QColor(255, 255, 255), 1))
+            
+            # Отрисовка облаков точек
+            for filename, cloud_info in self.point_clouds.items():
+                if cloud_info.get('active') and cloud_info.get('data') is not None:
+                    points_data = cloud_info['data']
+                    if len(points_data) > 0:
+                        # Применяем трансформации к точкам
+                        # Сначала применяем model_matrix (масштаб, поворот, перенос)
+                        transformed_points = self._apply_transformations(points_data)
+                        
+                        # Проекция точек на экран
+                        width = self.width()
+                        height = self.height()
+                        center_x = width / 2
+                        center_y = height / 2
+                        
+                        # Отрисовываем только часть точек для производительности
+                        step = max(1, len(transformed_points) // 10000)  # Ограничиваем количество точек
+                        for i in range(0, len(transformed_points), step):
+                            point = transformed_points[i]
+                            if len(point) >= 3:
+                                # Ортогональная проекция с учетом aspect ratio
+                                aspect_ratio = width / height if height > 0 else 1.0
+                                
+                                # Применяем проекционную матрицу
+                                if aspect_ratio > 1:
+                                    x = point[0] / aspect_ratio
+                                else:
+                                    x = point[0]
+                                y = point[1] * aspect_ratio if aspect_ratio <= 1 else point[1]
+                                
+                                # Масштабирование и центрирование
+                                screen_x = int(center_x + x * 100)
+                                screen_y = int(center_y - y * 100)  # Инвертируем Y для правильной ориентации
+                                
+                                if 0 <= screen_x < width and 0 <= screen_y < height:
+                                    painter.drawPoint(screen_x, screen_y)
+            
+            # Создание и запись командного буфера (для будущего использования)
             if self.command_pool:
-                command_buffer = self._create_command_buffer()
-                # Примечание: для реального рендеринга нужен render_pass_begin_info
-                # который создается при инициализации swapchain
-                self._record_command_buffer(command_buffer)
-
-                # В реальной реализации здесь бы было:
-                # 1. Получение изображения из swapchain
-                # 2. Запись команд с правильным render pass
-                # 3. Отправка команд в очередь
-                # 4. Представление изображения
+                try:
+                    command_buffer = self._create_command_buffer()
+                    self._record_command_buffer(command_buffer)
+                except Exception as e:
+                    # Игнорируем ошибки командного буфера, так как у нас нет полного Vulkan контекста
+                    pass
+            
+            painter.end()
+            
+            # Записываем метрики производительности, если монитор установлен
+            if self.performance_monitor is not None:
+                # Получаем elapsed_time из benchmark_controller, если он существует и бенчмарк запущен
+                elapsed_time = 0.0
+                if hasattr(self.performance_monitor, 'benchmark_controller'):
+                    controller = self.performance_monitor.benchmark_controller
+                    # Проверяем, что контроллер существует и бенчмарк запущен
+                    if controller is not None and hasattr(controller, 'is_running') and controller.is_running:
+                        if hasattr(controller, 'elapsed_time'):
+                            elapsed_time = controller.elapsed_time
+                # Записываем метрики всегда, если монитор установлен
+                # record_frame определит этап на основе elapsed_time (или использует текущий этап)
+                self.performance_monitor.record_frame(elapsed_time)
 
         def resizeEvent(self, event):
             """Обработка изменения размера окна"""
@@ -949,7 +1097,7 @@ if VULKAN_AVAILABLE:
 
         def mouseMoveEvent(self, event):
             """Обработка движения мыши"""
-            rotation_sensitivity = 0.3
+            rotation_sensitivity = 0.3  # Коэффициент чувствительности вращения
 
             if (self.last_mouse_position and event.buttons() == Qt.MouseButton.LeftButton):
                 delta = event.position() - self.last_mouse_position
@@ -959,6 +1107,7 @@ if VULKAN_AVAILABLE:
                 else:
                     self.rotation_z -= delta.x() * rotation_sensitivity
 
+                # Нормализуем углы поворота
                 self.rotation_x = self.normalize_angle(self.rotation_x)
                 self.rotation_y = self.normalize_angle(self.rotation_y)
                 self.rotation_z = self.normalize_angle(self.rotation_z)
@@ -966,7 +1115,7 @@ if VULKAN_AVAILABLE:
                 self.last_mouse_position = event.position()
                 self.update()
 
-            shift_sensitivity = 0.00285 / self.scale_factor
+            shift_sensitivity = 0.00285 / self.scale_factor  # Коэффициент чувствительности смещения
 
             if (self.last_mouse_position and event.buttons() == Qt.MouseButton.RightButton):
                 delta = event.position() - self.last_mouse_position

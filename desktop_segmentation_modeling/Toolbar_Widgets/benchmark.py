@@ -28,7 +28,13 @@ class BenchmarkWidget(QWidget):
         self.benchmark_controller = BenchmarkController(opengl_widget, duration=20.0)
         
         # Устанавливаем ссылку на монитор производительности в OpenGL виджете
+        # Это важно для записи метрик при отрисовке
         self.opengl_widget.performance_monitor = self.benchmark_controller.monitor
+        
+        # Убеждаемся, что monitor имеет ссылку на controller (уже установлено в BenchmarkController.__init__)
+        # но на всякий случай проверяем
+        if not hasattr(self.benchmark_controller.monitor, 'benchmark_controller'):
+            self.benchmark_controller.monitor.benchmark_controller = self.benchmark_controller
         
         # Подключаем сигналы
         self.benchmark_controller.benchmark_finished.connect(self.on_benchmark_finished)
