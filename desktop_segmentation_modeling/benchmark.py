@@ -5,6 +5,7 @@
 import time
 import psutil
 import json
+import csv
 from datetime import datetime
 from collections import deque
 from PyQt6.QtCore import QTimer, QObject, pyqtSignal
@@ -49,6 +50,13 @@ class PerformanceMonitor(QObject):
         self.frame_count = 0
         self.current_stage = 0
         
+        # Данные для временной зависимости FPS (запись каждые 0.1 секунды)
+        self.fps_timeline = []  # Список кортежей (elapsed_time, fps)
+        self.fps_samples_in_interval = []  # FPS значения в текущем интервале 0.1 сек
+        self.last_csv_record_time = 0.0  # Время последней записи в CSV
+        self.csv_interval = 0.1  # Интервал записи в секундах (0.1 = 100мс)
+        self.benchmark_start_time = None  # Время начала бенчмарка
+        
         self.process = psutil.Process()
         
         if GPU_AVAILABLE:
@@ -80,6 +88,22 @@ class PerformanceMonitor(QObject):
             fps = 1.0 / delta_time
             self.fps_history.append(fps)
             self.stage_metrics[stage]['fps'].append(fps)
+            
+            # Запись FPS для временной зависимости (каждые 0.1 секунды)
+            if elapsed_time > 0:
+                # Добавляем текущий FPS в список для текущего интервала
+                self.fps_samples_in_interval.append(fps)
+                
+                # Проверяем, прошло ли 0.1 секунды с последней записи
+                if elapsed_time - self.last_csv_record_time >= self.csv_interval:
+                    # Вычисляем средний FPS за интервал
+                    if len(self.fps_samples_in_interval) > 0:
+                        avg_fps = np.mean(self.fps_samples_in_interval)
+                        self.fps_timeline.append((elapsed_time, avg_fps))
+                        self.fps_samples_in_interval.clear()
+                    
+                    # Обновляем время последней записи
+                    self.last_csv_record_time = elapsed_time
         
         self.last_frame_time = current_time
         self.frame_count += 1
@@ -165,12 +189,50 @@ class PerformanceMonitor(QObject):
         self.current_stage = 0
         self.last_frame_time = time.time()
         
+        # Сбрасываем данные временной зависимости FPS
+        self.fps_timeline.clear()
+        self.fps_samples_in_interval.clear()
+        self.last_csv_record_time = 0.0
+        self.benchmark_start_time = None
+        
         # Сбрасываем метрики по этапам
         for stage_id in range(4):
             self.stage_metrics[stage_id]['fps'].clear()
             self.stage_metrics[stage_id]['cpu'].clear()
             self.stage_metrics[stage_id]['gpu'].clear()
             self.stage_metrics[stage_id]['ram'].clear()
+    
+    def save_fps_timeline_to_csv(self, filename=None):
+        """
+        Сохраняет временную зависимость FPS в CSV файл.
+        
+        Args:
+            filename: Путь к файлу. Если None, создается автоматически.
+        
+        Returns:
+            str: Путь к сохраненному файлу
+        """
+        if not filename:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"fps_timeline_{timestamp}.csv"
+        
+        # Сортируем по времени на случай, если данные не в порядке
+        sorted_timeline = sorted(self.fps_timeline, key=lambda x: x[0])
+        
+        try:
+            with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile)
+                # Записываем заголовок
+                writer.writerow(['Time (seconds)', 'FPS'])
+                
+                # Записываем данные
+                for elapsed_time, fps in sorted_timeline:
+                    writer.writerow([f'{elapsed_time:.3f}', f'{fps:.2f}'])
+            
+            return filename
+        except Exception as e:
+            print(f"Ошибка при сохранении CSV файла: {e}")
+            return None
 
 
 class BenchmarkController(QObject):
@@ -238,12 +300,23 @@ class BenchmarkController(QObject):
         self.timer.stop()
         self.is_running = False
         
+        # Сохраняем оставшиеся данные FPS (если есть)
+        if len(self.monitor.fps_samples_in_interval) > 0 and self.elapsed_time > 0:
+            avg_fps = np.mean(self.monitor.fps_samples_in_interval)
+            self.monitor.fps_timeline.append((self.elapsed_time, avg_fps))
+            self.monitor.fps_samples_in_interval.clear()
+        
         # Получаем статистику
         stats = self.monitor.get_statistics()
         
         # Добавляем дополнительную информацию
         stats['duration'] = self.elapsed_time
         stats['timestamp'] = datetime.now().isoformat()
+        
+        # Автоматически сохраняем временную зависимость FPS в CSV
+        csv_filename = self.monitor.save_fps_timeline_to_csv()
+        if csv_filename:
+            stats['fps_timeline_csv'] = csv_filename
         
         # Эмитируем сигнал с результатами
         self.benchmark_finished.emit(stats)

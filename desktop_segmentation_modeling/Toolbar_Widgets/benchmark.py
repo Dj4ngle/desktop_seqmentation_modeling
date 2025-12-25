@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from ..benchmark import BenchmarkController
+from datetime import datetime
 import os
 
 
@@ -81,11 +82,20 @@ class BenchmarkWidget(QWidget):
         self.results_text.setMaximumHeight(300)
         results_layout.addWidget(self.results_text)
         
-        # Кнопка сохранения результатов
-        self.save_button = QPushButton("Сохранить результаты")
+        # Кнопки сохранения
+        save_buttons_layout = QHBoxLayout()
+        
+        self.save_button = QPushButton("Сохранить результаты (JSON)")
         self.save_button.clicked.connect(self.save_results)
         self.save_button.setEnabled(False)
-        results_layout.addWidget(self.save_button)
+        save_buttons_layout.addWidget(self.save_button)
+        
+        self.save_csv_button = QPushButton("Сохранить FPS timeline (CSV)")
+        self.save_csv_button.clicked.connect(self.save_fps_csv)
+        self.save_csv_button.setEnabled(False)
+        save_buttons_layout.addWidget(self.save_csv_button)
+        
+        results_layout.addLayout(save_buttons_layout)
         
         results_group.setLayout(results_layout)
         layout.addWidget(results_group)
@@ -233,8 +243,16 @@ class BenchmarkWidget(QWidget):
         
         text += f"Время выполнения: {results.get('timestamp', 'N/A')}\n"
         
+        # Информация о CSV файле с временной зависимостью FPS
+        if 'fps_timeline_csv' in results:
+            csv_file = results['fps_timeline_csv']
+            text += f"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            text += f"Временная зависимость FPS сохранена в CSV:\n"
+            text += f"{csv_file}\n"
+        
         self.results_text.setText(text)
         self.save_button.setEnabled(True)
+        self.save_csv_button.setEnabled(True)
         
         # Сохраняем результаты в атрибут для последующего сохранения
         self.last_results = results
@@ -254,4 +272,23 @@ class BenchmarkWidget(QWidget):
         if filename:
             saved_file = self.benchmark_controller.save_results(filename)
             self.results_text.append(f"\nРезультаты сохранены в: {saved_file}")
+    
+    def save_fps_csv(self):
+        """Сохраняет временную зависимость FPS в CSV файл."""
+        if not hasattr(self.benchmark_controller, 'monitor'):
+            return
+        
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "Сохранить временную зависимость FPS",
+            f"fps_timeline_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            "CSV Files (*.csv);;All Files (*)"
+        )
+        
+        if filename:
+            saved_file = self.benchmark_controller.monitor.save_fps_timeline_to_csv(filename)
+            if saved_file:
+                self.results_text.append(f"\nВременная зависимость FPS сохранена в: {saved_file}")
+            else:
+                self.results_text.append(f"\nОшибка при сохранении CSV файла.")
 
