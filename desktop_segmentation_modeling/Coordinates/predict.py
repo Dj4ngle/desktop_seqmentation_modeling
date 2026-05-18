@@ -1,3 +1,11 @@
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    message=".*pynvml package is deprecated.*",
+    category=FutureWarning,
+)
+
 import torch
 import numpy as np
 from desktop_segmentation_modeling.Coordinates.predictmdl.models.pointnet2_cls_ssg import get_model

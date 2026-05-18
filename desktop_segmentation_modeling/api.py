@@ -11,12 +11,6 @@ from PyQt6.QtWidgets import QApplication
 
 from desktop_segmentation_modeling.config import base_path
 from desktop_segmentation_modeling.main_window import MyMainWindow
-from desktop_segmentation_modeling.Coordinates import (
-    coord_settings,
-    coordinates,
-    merge_coordinates,
-    clear_excess_stumps
-)
 
 
 def run_app():
@@ -343,6 +337,13 @@ def run_coordinates(
         FileNotFoundError: Если файл облака точек не найден
         ValueError: Если параметры некорректны
     """
+    from desktop_segmentation_modeling.Coordinates import (
+        clear_excess_stumps,
+        coord_settings,
+        coordinates,
+        merge_coordinates,
+    )
+
     if not os.path.exists(point_cloud_path):
         raise FileNotFoundError(f"Файл не найден: {point_cloud_path}")
     

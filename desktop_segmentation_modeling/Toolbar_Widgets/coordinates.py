@@ -4,11 +4,6 @@ from PyQt6.QtWidgets import (QDockWidget, QVBoxLayout, QWidget, QPushButton, QLa
 from PyQt6.QtCore import Qt, QRegularExpression, QThread, pyqtSignal
 from PyQt6.QtGui import QRegularExpressionValidator
 
-from desktop_segmentation_modeling.Coordinates import clear_excess_stumps, coord_settings, merge_coordinates, \
-    coordinates
-from desktop_segmentation_modeling.Segmentation import segmentation_ram, seg_settings, segmentation_vor, \
-    segmentation_clear
-
 
 def coordinates_dock_widget(self):
     """Создает виджет для обнаружения координат пней."""
@@ -93,6 +88,19 @@ class CoordinatesWorker(QThread):
     def run(self):
         """Выполнение расчётов в фоновом потоке"""
         try:
+            from desktop_segmentation_modeling.Coordinates import (
+                clear_excess_stumps,
+                coord_settings,
+                merge_coordinates,
+                coordinates,
+            )
+            from desktop_segmentation_modeling.Segmentation import (
+                segmentation_clear,
+                segmentation_ram,
+                segmentation_vor,
+                seg_settings,
+            )
+
             # Определяем путь к tmp директории один раз для всех файлов
             # Используем текущую рабочую директорию для совместимости с библиотекой
             # Это гарантирует работу как при разработке, так и при использовании как библиотеки
@@ -163,7 +171,7 @@ class CoordinatesWorker(QThread):
 def run_coordinates(self):
     """Запускает процесс обнаружения координат деревьев в фоновом потоке."""
     # Проверяем, не запущен ли уже процесс
-    if hasattr(self, '_coordinates_worker') and self._coordinates_worker.isRunning():
+    if getattr(self, '_coordinates_worker', None) and self._coordinates_worker.isRunning():
         print("Расчёты уже выполняются. Пожалуйста, дождитесь завершения.")
         return
     
@@ -212,7 +220,9 @@ def run_coordinates(self):
     def on_finished():
         print("Расчёты координат завершены.")
         if hasattr(self, '_coordinates_worker'):
-            self._coordinates_worker.deleteLater()
+            worker = self._coordinates_worker
+            self._coordinates_worker = None
+            worker.deleteLater()
     
     # error - обработчик ошибок
     def on_error(error_msg):

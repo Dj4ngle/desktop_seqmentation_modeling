@@ -104,6 +104,29 @@ class OpenGLWidget(QOpenGLWidget):
         self.scale_factor = self.calculate_scale_factor_for_all()
         self.update()
 
+    def load_model_from_arrays(self, filename, points):
+        if filename in self.vbo_data_models:
+            self.models[filename]['active'] = True
+            self.update()
+            return
+
+        points = np.asarray(points, dtype=np.float32)
+        if len(points) == 0:
+            print(f"Модель {filename} не содержит вершин")
+            return
+
+        colors = np.ones((len(points), 3), dtype=np.float32)
+        point_vbo = vbo.VBO(points)
+        color_vbo = vbo.VBO(colors)
+        self.vbo_data_models[filename] = (point_vbo, color_vbo, len(points))
+        self.models[filename] = {
+            'active': True,
+            'data': points,
+            'num_polygons': len(points) // 3
+        }
+        self.scale_factor = self.calculate_scale_factor_for_all()
+        self.update()
+
     def calculate_scale_factor_for_all(self):
         max_cloud = 0
         max_model = 0

@@ -262,14 +262,20 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
     def add_properties_section(self, title):
         label = QLabel(title)
-        label.setStyleSheet("font-weight: bold; padding-top: 10px; padding-bottom: 4px;")
+        label.setStyleSheet(
+            "background-color: transparent; color: #CCCEDB; "
+            "font-weight: bold; padding-top: 10px; padding-bottom: 4px;"
+        )
         label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self.properties_layout.addWidget(label)
 
     def add_property_row(self, label, value):
         property_label = QLabel(f"{label}: {value}")
         property_label.setWordWrap(True)
-        property_label.setStyleSheet("padding-top: 0px; padding-bottom: 0px; margin: 0px;")
+        property_label.setStyleSheet(
+            "background-color: transparent; color: #CCCEDB; "
+            "padding-top: 0px; padding-bottom: 0px; margin: 0px;"
+        )
         property_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self.properties_layout.addWidget(property_label)
 
