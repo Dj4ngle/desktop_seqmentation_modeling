@@ -1,9 +1,10 @@
 import os
 import open3d as o3d
 import pandas as pd
+import numpy as np
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import QMainWindow, QFileDialog, QListWidgetItem, QCheckBox, QApplication, QLabel
+from PyQt6.QtWidgets import QMainWindow, QFileDialog, QListWidgetItem, QCheckBox, QApplication, QLabel, QSizePolicy
 from .Toolbar_Widgets import modeling
 from desktop_segmentation_modeling.config import base_path
 from .Toolbar_Widgets.design import Ui_MainWindow
@@ -229,30 +230,187 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
     def update_properties_dock(self, file_path):
         if file_path in self.openGLWidget.point_clouds:
             if self.openGLWidget.point_clouds[file_path]['active']:
-                num_points = self.openGLWidget.vbo_data[file_path][2]
-
                 self.clear_properties_dock()
-                file_label = QLabel(f"Файл: {os.path.basename(file_path)}")
-                num_points_label = QLabel(f"Количество точек: {num_points}")
+                self.add_properties_section("Основные свойства")
+                for label, value in self.get_basic_point_cloud_properties(file_path):
+                    self.add_property_row(label, value)
 
-                self.properties_layout.addWidget(file_label)
-                self.properties_layout.addWidget(num_points_label)
+                file_extension = os.path.splitext(file_path)[1].lower()
+                if file_extension == ".las":
+                    self.add_properties_section("LAS")
+                    for label, value in self.get_las_properties(file_path):
+                        self.add_property_row(label, value)
+                elif file_extension == ".pcd":
+                    self.add_properties_section("PCD")
+                    for label, value in self.get_pcd_properties(file_path):
+                        self.add_property_row(label, value)
+                self.properties_layout.addStretch()
+
         if file_path in self.openGLWidget.models:
             if self.openGLWidget.models[file_path]['active']:
                 triangles = self.openGLWidget.vbo_data_models[file_path][2] / 3
 
                 self.clear_properties_dock()
-                file_label = QLabel(f"Файл: {os.path.basename(file_path)}")
-                num_points_label = QLabel(f"Количество полигонов: {int(triangles)}")
-                self.properties_layout.addWidget(file_label)
-                self.properties_layout.addWidget(num_points_label)
+                self.add_properties_section("Основные свойства")
+                self.add_property_row("Файл", os.path.basename(file_path))
+                self.add_property_row("Путь", file_path)
+                self.add_property_row("Формат", os.path.splitext(file_path)[1].lower() or "неизвестно")
+                self.add_property_row("Тип", "3D-модель")
+                self.add_property_row("Статус", "активен")
+                self.add_property_row("Полигонов", int(triangles))
+                self.properties_layout.addStretch()
+
+    def add_properties_section(self, title):
+        label = QLabel(title)
+        label.setStyleSheet("font-weight: bold; padding-top: 10px; padding-bottom: 4px;")
+        label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        self.properties_layout.addWidget(label)
+
+    def add_property_row(self, label, value):
+        property_label = QLabel(f"{label}: {value}")
+        property_label.setWordWrap(True)
+        property_label.setStyleSheet("padding-top: 0px; padding-bottom: 0px; margin: 0px;")
+        property_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        self.properties_layout.addWidget(property_label)
+
+    def get_basic_point_cloud_properties(self, file_path):
+        file_extension = os.path.splitext(file_path)[1].lower() or "неизвестно"
+        points = self.get_point_cloud_points(file_path)
+        num_points = len(points) if points is not None else self.openGLWidget.vbo_data.get(file_path, (None, None, 0))[2]
+
+        properties = [
+            ("Файл", os.path.basename(file_path)),
+            ("Путь", file_path),
+            ("Формат", file_extension),
+            ("Тип", "облако точек"),
+            ("Статус", "активен"),
+            ("Количество точек", num_points),
+            ("Размер файла", self.format_file_size(file_path)),
+        ]
+
+        return properties
+
+    def get_point_cloud_points(self, file_path):
+        cloud_info = self.openGLWidget.point_clouds.get(file_path)
+        if not cloud_info:
+            return None
+
+        points = cloud_info.get('full_data')
+        if points is None:
+            points = cloud_info.get('data')
+
+        if isinstance(points, o3d.geometry.PointCloud):
+            points = np.asarray(points.points)
+        elif points is not None:
+            points = np.asarray(points)
+
+        if points is None or points.ndim != 2 or points.shape[1] < 3:
+            return None
+
+        return points[:, :3]
+
+    def format_file_size(self, file_path):
+        if not os.path.exists(file_path):
+            return "нет на диске"
+
+        size_bytes = os.path.getsize(file_path)
+        units = ["Б", "КБ", "МБ", "ГБ"]
+        size = float(size_bytes)
+        for unit in units:
+            if size < 1024 or unit == units[-1]:
+                return f"{size:.1f} {unit}"
+            size /= 1024
+
+    def get_las_properties(self, file_path):
+        if not os.path.exists(file_path):
+            return [("Метаданные", "файл не найден на диске")]
+
+        try:
+            las = pylas.read(file_path)
+        except Exception as error:
+            return [("Ошибка чтения", error)]
+
+        properties = [
+            ("Версия", getattr(las.header, "version", "неизвестно")),
+            ("Формат точек", getattr(getattr(las.header, "point_format", None), "id", "неизвестно")),
+            ("Scale", self.format_sequence(getattr(las.header, "scales", []))),
+            ("Offset", self.format_sequence(getattr(las.header, "offsets", []))),
+        ]
+
+        intensity = self.get_las_dimension(las, "intensity")
+        if intensity is not None and len(intensity) > 0:
+            properties.extend([
+                ("Intensity min", int(np.min(intensity))),
+                ("Intensity max", int(np.max(intensity))),
+                ("Intensity mean", f"{np.mean(intensity):.1f}"),
+            ])
+
+        classification = self.get_las_dimension(las, "classification")
+        if classification is not None and len(classification) > 0:
+            properties.append(("Классов", len(np.unique(classification))))
+
+        return_number = self.get_las_dimension(las, "return_number")
+        if return_number is not None and len(return_number) > 0:
+            properties.append(("Returns", ", ".join(map(str, np.unique(return_number)))))
+
+        has_rgb = all(self.get_las_dimension(las, name) is not None for name in ("red", "green", "blue"))
+        properties.append(("RGB", "есть" if has_rgb else "нет"))
+
+        try:
+            crs = las.header.parse_crs()
+            if crs:
+                properties.append(("CRS", str(crs)))
+        except Exception:
+            pass
+
+        return properties
+
+    def get_las_dimension(self, las, name):
+        try:
+            return np.asarray(getattr(las, name))
+        except Exception:
+            return None
+
+    def get_pcd_properties(self, file_path):
+        pcd = None
+
+        if os.path.exists(file_path):
+            try:
+                pcd = o3d.io.read_point_cloud(file_path)
+            except Exception as error:
+                return [("Ошибка чтения", error)]
+        else:
+            cloud_info = self.openGLWidget.point_clouds.get(file_path, {})
+            data = cloud_info.get('data')
+            if isinstance(data, o3d.geometry.PointCloud):
+                pcd = data
+
+        if pcd is None:
+            return [("Источник", "сгенерировано в приложении")]
+
+        properties = [
+            ("Цвета", "есть" if pcd.has_colors() else "нет"),
+            ("Нормали", "есть" if pcd.has_normals() else "нет"),
+            ("Источник", "файл" if os.path.exists(file_path) else "память приложения"),
+        ]
+
+        return properties
+
+    def format_sequence(self, values):
+        try:
+            return ", ".join(f"{float(value):.6g}" for value in values)
+        except Exception:
+            return "неизвестно"
 
     def clear_properties_dock(self):
         if self.properties_layout:
             for i in reversed(range(self.properties_layout.count())):
-                widget = self.properties_layout.itemAt(i).widget()
+                item = self.properties_layout.itemAt(i)
+                widget = item.widget()
                 if widget:
                     widget.setParent(None)
+                else:
+                    self.properties_layout.removeItem(item)
 
     def toggle_dock_widget(self, dock_widget_name, dock_area):
         dock_widget = self.dock_widgets.get(dock_widget_name)
@@ -267,6 +425,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             # И отображаем нужный виджет
             self.addDockWidget(dock_area, dock_widget)
             dock_widget.show()
+        self.apply_adaptive_dock_sizes()
 
     def save_selected_tree(self):
         selected_files = []

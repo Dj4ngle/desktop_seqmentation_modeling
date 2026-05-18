@@ -15,7 +15,7 @@ class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.setWindowTitle("LIDAR segmentation and modeling")
-        MainWindow.resize(1600, 900)
+        self.configure_adaptive_window_size(MainWindow)
         # Центральный виджет
         self.centralwidget = QtWidgets.QWidget(parent=MainWindow)
         self.centralwidget.setObjectName("centralwidget")
@@ -34,8 +34,67 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
         
         # Стыковочные виджеты
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.files_dock_widget())
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.properties_dock_widget())
+        self.files_dock = self.files_dock_widget()
+        self.properties_dock = self.properties_dock_widget()
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.files_dock)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.properties_dock)
+        self.apply_adaptive_dock_sizes()
+
+    def configure_adaptive_window_size(self, MainWindow):
+        screen = QtWidgets.QApplication.primaryScreen()
+        if screen:
+            geometry = screen.availableGeometry()
+            screen_width = geometry.width()
+            screen_height = geometry.height()
+        else:
+            screen_width = 1600
+            screen_height = 900
+
+        window_width = min(1600, int(screen_width * 0.9))
+        window_height = min(900, int(screen_height * 0.9))
+        MainWindow.resize(window_width, window_height)
+        MainWindow.setMinimumSize(
+            min(900, int(screen_width * 0.65)),
+            min(600, int(screen_height * 0.65)),
+        )
+
+        self.dock_panel_width = max(240, min(340, int(screen_width * 0.18)))
+        self.properties_panel_width = max(160, min(240, int(screen_width * 0.11)))
+
+    def configure_dock_width(self, dock, width):
+        dock.setMinimumWidth(width)
+        dock.setMaximumWidth(width)
+
+    def apply_adaptive_dock_sizes(self):
+        dock_widths = []
+        files_dock = getattr(self, 'files_dock', None)
+        properties_dock = getattr(self, 'properties_dock', None)
+
+        if files_dock is not None:
+            dock_widths.append((files_dock, self.dock_panel_width))
+        if properties_dock is not None:
+            dock_widths.append((properties_dock, self.properties_panel_width))
+        dock_widths.extend(
+            (dock, self.dock_panel_width)
+            for dock in getattr(self, 'dock_widgets', {}).values()
+        )
+
+        for dock, width in dock_widths:
+            if dock is not None:
+                self.configure_dock_width(dock, width)
+
+        visible_dock_widths = [
+            (dock, width)
+            for dock, width in dock_widths
+            if dock is not None and dock.isVisible()
+        ]
+        visible_docks = [dock for dock, _ in visible_dock_widths]
+        if visible_docks:
+            self.resizeDocks(
+                visible_docks,
+                [width for _, width in visible_dock_widths],
+                Qt.Orientation.Horizontal,
+            )
 
     def update_list(self, list):
         list.clear()
@@ -54,12 +113,15 @@ class Ui_MainWindow(object):
             # Пример!!!
             # 'example': example_widget.example_dock_widget(self)  # ← наш виджет
         }
+        self.apply_adaptive_dock_sizes()
 
     def properties_dock_widget(self):
         dock = QDockWidget('Свойства')
         dock.setAllowedAreas(QtCore.Qt.DockWidgetArea.AllDockWidgetAreas)
         widget = QWidget()
         layout = QVBoxLayout()
+        layout.setSpacing(4)
+        layout.setContentsMargins(8, 8, 8, 8)
         self.properties_layout = layout  # Сохраняем ссылку на layout для обновления
         widget.setLayout(layout)
         dock.setWidget(widget)

@@ -117,15 +117,8 @@ def taxation_dock_widget(self):
         widget = QWidget()
         layout = QVBoxLayout()
 
-        # 1. Информация о выборе файлов
-        layout.addWidget(QLabel("📂 **Облака точек** (Выберите файлы из списка 'Файлы'):"))
-        info_label = QLabel("Используйте чекбоксы в виджете 'Файлы' для выбора облаков точек")
-        info_label.setWordWrap(True)
-        info_label.setStyleSheet("color: gray; font-size: 10pt;")
-        layout.addWidget(info_label)
-
-        # 2. Параметры таксации и настройки
-        layout.addWidget(QLabel("⚙️ **Параметры для расчета:**"))
+        # Параметры таксации и настройки
+        layout.addWidget(QLabel("⚙️ Параметры для расчета:"))
         params_layout = QGridLayout()
 
         # Чекбоксы для выбора параметров
@@ -157,7 +150,7 @@ def taxation_dock_widget(self):
         layout.addWidget(get_parameters_button)
 
         # 4. Поле для вывода результатов
-        layout.addWidget(QLabel("📋 **Результаты:**"))
+        layout.addWidget(QLabel("📋 Результаты:"))
         self.results_label = QLabel("Выберите облака точек в виджете 'Файлы' и нажмите 'Рассчитать параметры'.")
         self.results_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse)  # Чтобы можно было копировать текст
@@ -206,7 +199,7 @@ def run_taxation_calculation(self):
             selected_files.append(checkbox.property("filePath"))
     
     if not selected_files:
-        self.results_label.setText("⚠️ **Ошибка:** Выберите хотя бы одно облако точек в виджете 'Файлы'.")
+        self.results_label.setText("⚠️ Ошибка: Выберите хотя бы одно облако точек в виджете 'Файлы'.")
         return
 
     # Получаем выбранные параметры
@@ -258,7 +251,7 @@ def run_taxation_calculation(self):
     all_results = []
     for file_path in selected_files:
         filename = os.path.basename(file_path)
-        self.results_label.setText(f"Расчет параметров для: **{filename}**...")
+        self.results_label.setText(f"Расчет параметров для: {filename}...")
         QApplication.processEvents()  # Обновляем UI
         
         results, error = taxation_logic.calculate_tree_parameters(
@@ -276,13 +269,13 @@ def run_taxation_calculation(self):
             all_results.append((filename, results, None))
     
     # Форматирование и вывод результатов
-    result_text = "✅ **Результаты таксации:**\n\n"
+    result_text = "✅ Результаты таксации:\n\n"
     
     for filename, results, error in all_results:
         if error:
-            result_text += f"❌ **{filename}:** {error}\n\n"
+            result_text += f"❌ {filename}: {error}\n\n"
         elif results:
-            result_text += f"📊 **{filename}:**\n"
+            result_text += f"📊 {filename}:\n"
             if 'Height' in results and calculate_height:
                 result_text += f"  - Высота: {results['Height']:.2f} м\n"
             if 'DBH' in results and calculate_dbh:
