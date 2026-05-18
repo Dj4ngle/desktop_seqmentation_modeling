@@ -1,7 +1,6 @@
 import os
 import pandas as pd
 import numpy as np
-import shutil
 from tqdm import tqdm
 
 from desktop_segmentation_modeling.Coordinates import predict
@@ -37,42 +36,43 @@ def clear_excess_stumps(cs):
 
     names_col = []
     n = count_num_files(cs)
-    path_merged = os.path.join(cs.path_base, "merged")
-    makedirs_if_not_exist(path_merged)
     first_n_columns = df.iloc[:, :n]
     column_names = first_n_columns.columns
-    initial_labels = np.full((1, df.shape[0]),-1)
+    labels_matrix = np.full((df.shape[0], n), -1, dtype=np.int16)
+    predictor = predict.StumpPredictor(model_name)
+
     for i in tqdm(range(n)):
-        labels = []
         parts = column_names[i].split("_")
         parts_int = parts[-1]
         if "." in parts_int:
             parts_int = parts_int.split(".")[0]
         names_col.append("Labels_"+str(parts_int))
         path_int = os.path.join(cs.path_base, parts_int, cs.cut_data_method + '_cells', 'stumps')
+
+        rows_to_predict = []
+        paths_to_predict = []
         for j in tqdm(range(df.shape[0])):
             value = first_n_columns.at[j, column_names[i]]
             if value != "File__Not__Found":
                 path_file = os.path.join(path_int, value)
-                path_save = os.path.join(path_merged, value)
-                try:
-                    shutil.copy2(path_file, path_save)
-
-                    label = predict.test(path_save, model_name)
-                    labels.append(label)   
-                except FileNotFoundError:
+                if os.path.exists(path_file):
+                    rows_to_predict.append(j)
+                    paths_to_predict.append(path_file)
+                else:
                     print(f"No such file: {path_file}")
-                    labels.append(-3)
+                    labels_matrix[j, i] = -3
             elif value == "File__Not__Found":
-                labels.append(-2)
+                labels_matrix[j, i] = -2
             else:
                 print("ERROR")
                 break
-        labels = np.asarray([labels])
-        initial_labels = np.vstack([initial_labels, labels])
-    initial_labels = initial_labels.T
 
-    df_labels = pd.DataFrame(data = initial_labels[:,1:n+1], columns=names_col)
+        if paths_to_predict:
+            predicted_labels = predictor.predict_batch(paths_to_predict)
+            for row_idx, label in zip(rows_to_predict, predicted_labels):
+                labels_matrix[row_idx, i] = label
+
+    df_labels = pd.DataFrame(data=labels_matrix, columns=names_col)
     df_result = pd.concat([df, df_labels], axis=1)
 
     # Извлекаем только имя файла

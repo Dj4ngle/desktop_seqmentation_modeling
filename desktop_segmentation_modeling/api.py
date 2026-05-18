@@ -4,13 +4,8 @@
 
 import os
 import sys
-import numpy as np
-from sklearn.cluster import DBSCAN
-import open3d as o3d
-from PyQt6.QtWidgets import QApplication
 
 from desktop_segmentation_modeling.config import base_path
-from desktop_segmentation_modeling.main_window import MyMainWindow
 
 
 def run_app():
@@ -30,6 +25,9 @@ def run_app():
     Returns:
         None - функция блокирует выполнение до закрытия приложения
     """
+    from PyQt6.QtWidgets import QApplication
+    from desktop_segmentation_modeling.main_window import MyMainWindow
+
     app = QApplication([])
     
     # Загружаем стили
@@ -87,6 +85,10 @@ def run_segmentation(
         FileNotFoundError: Если файл облака точек не найден
         ValueError: Если параметры некорректны
     """
+    import numpy as np
+    import open3d as o3d
+    from sklearn.cluster import DBSCAN
+
     if not os.path.exists(point_cloud_path):
         raise FileNotFoundError(f"Файл не найден: {point_cloud_path}")
     
@@ -204,6 +206,9 @@ def run_taxation(
         FileNotFoundError: Если файл облака точек не найден
         ValueError: Если параметры некорректны
     """
+    import numpy as np
+    import open3d as o3d
+
     if not os.path.exists(point_cloud_path):
         raise FileNotFoundError(f"Файл не найден: {point_cloud_path}")
     

@@ -2,11 +2,8 @@
 include README.md
 include requirements.txt
 recursive-include desktop_segmentation_modeling/images *
-recursive-include desktop_segmentation_modeling/Coordinates/predictmdl/checkpoints *
 include desktop_segmentation_modeling/style.qss
 include desktop_segmentation_modeling/design.ui
 
-# Включаем все файлы из checkpoints (модели, логи, csv)
+# Включаем только runtime-модели из checkpoints, без логов и training csv
 recursive-include desktop_segmentation_modeling/Coordinates/predictmdl/checkpoints *.t7
-recursive-include desktop_segmentation_modeling/Coordinates/predictmdl/checkpoints *.log
-recursive-include desktop_segmentation_modeling/Coordinates/predictmdl/checkpoints *.csv

@@ -1,50 +1,53 @@
 import os
 import pandas as pd
 import numpy as np
+from scipy.spatial import cKDTree
 
 def makedirs_if_not_exist(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
 def merge(file1, file2, iter, names_col, array):
-    array = np.asarray(array)
-
     n_col_name = 0 + iter
     n_col_diam = (iter+1)*2
 
     eps = 0.25
-    for index, row in file1.iterrows():
-        array = np.vstack([array, np.asarray(row)])
+    array = file1.to_numpy(dtype=object)
+    XY = array[:, iter:iter + 2].astype(np.float64)
 
-    array = array[1:]
-    XY = array[:,iter:iter+2]
+    added_column_name = np.full(array.shape[0], "File__Not__Found", dtype=object)
+    added_column_diameter = np.full(array.shape[0], 0.0, dtype=np.float32)
 
-    added_column_name = np.asarray(np.full(array.shape[0],"File__Not__Found"), dtype=str)
-    added_column_diameter = np.asarray(np.full(array.shape[0],0.0), dtype=np.float32)
-    for index, row in file2.iterrows():
-        for point in XY:
-            if np.linalg.norm(np.asarray([float(point[0]), float(point[1])]) - np.asarray([float(row[1]), float(row[2])])) < eps:
-                idx = np.where(XY == point)[0][0]
-                
-                added_column_name[idx] = row[0]
-                added_column_diameter[idx] = row[3]
+    file2_values = file2.to_numpy(dtype=object)
+    file2_xy = file2_values[:, 1:3].astype(np.float64)
+    matched_file2 = np.zeros(file2_values.shape[0], dtype=bool)
+
+    if XY.shape[0] > 0 and file2_xy.shape[0] > 0:
+        tree = cKDTree(XY)
+        distances, indices = tree.query(file2_xy, distance_upper_bound=eps)
+        valid_matches = np.isfinite(distances) & (indices < XY.shape[0])
+
+        for file2_idx, array_idx in enumerate(indices[valid_matches]):
+            row = file2_values[np.flatnonzero(valid_matches)[file2_idx]]
+            added_column_name[array_idx] = row[0]
+            added_column_diameter[array_idx] = row[3]
+
+        matched_file2[valid_matches] = True
 
     array = np.insert(array, n_col_diam, added_column_diameter, axis=1)
     array = np.insert(array, n_col_name, added_column_name, axis=1)
    
-
-    for index, row in file2.iterrows():
-        AddFlag = True
-        for point in XY:
-            if np.linalg.norm(np.asarray([float(point[0]), float(point[1])]) - np.asarray([float(row[1]), float(row[2])])) < eps:
-                AddFlag = False
-        if AddFlag:
+    rows_to_add = []
+    for row, is_matched in zip(file2_values, matched_file2):
+        if not is_matched:
             added_row = ["File__Not__Found",row[0],row[1],row[2],0.0,row[3]]
             if iter > 1:
                 added_row.insert((iter)*2, 0.0)
                 added_row.insert(iter-1, "File__Not__Found")
-            added_row = np.asarray(added_row)
-            array = np.vstack([array, added_row])
+            rows_to_add.append(added_row)
+
+    if rows_to_add:
+        array = np.vstack([array, np.asarray(rows_to_add, dtype=object)])
 
     df = pd.DataFrame(data = array, columns=names_col)
     df = df.dropna()

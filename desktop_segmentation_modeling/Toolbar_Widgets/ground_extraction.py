@@ -3,10 +3,9 @@ import os
 import open3d as o3d
 import numpy as np
 
-from OpenGL.arrays import vbo
-
 from PyQt6.QtWidgets import (QDockWidget, QVBoxLayout, QWidget, QPushButton, QListWidget)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from desktop_segmentation_modeling.point_cloud_data import get_points_array_from_clouds
 
 
 class GroundExtractionWorker(QThread):
@@ -28,15 +27,12 @@ class GroundExtractionWorker(QThread):
             normal_threshold = 0.1
             height_offset = 5
 
-            idx_normals = np.where((abs(normals[:, 1]) < normal_threshold))
-            idx_ground = np.where(self.points[:, 1] > np.min(self.points[:, 1]) + height_offset)
-            idx_wronglyfiltered = np.setdiff1d(idx_ground[0], idx_normals[0])
-            idx_retained = np.append(idx_normals[0], idx_wronglyfiltered)
+            normals_mask = np.abs(normals[:, 1]) < normal_threshold
+            high_points_mask = self.points[:, 1] > np.min(self.points[:, 1]) + height_offset
+            retained_mask = normals_mask | high_points_mask
 
-            points_retained = self.points[idx_retained]
-            idx_all = np.arange(self.points.shape[0])
-            idx_inv = np.setdiff1d(idx_all, idx_retained)
-            points_ground = self.points[idx_inv]
+            points_retained = self.points[retained_mask]
+            points_ground = self.points[~retained_mask]
 
             colors_ground = np.zeros(points_ground.shape)
             colors_ground[:, 0] = 1
@@ -124,32 +120,14 @@ def perform_ground_extraction(self, file_path):
 
 
 def add_result_cloud(self, file_path, points, colors):
-    self.openGLWidget.point_clouds[file_path] = {
-        'active': True,
-        'data': points,
-        'full_data': points,
-    }
-    point_vbo = vbo.VBO(points.astype(np.float32))
-    color_vbo = vbo.VBO(colors.astype(np.float32))
-    self.openGLWidget.vbo_data[file_path] = (point_vbo, color_vbo, len(points))
+    self.openGLWidget.load_point_cloud_from_arrays(
+        file_path,
+        points,
+        colors=colors,
+        full_data=points,
+    )
     self.add_file_to_list_widget(file_path)
 
 
 def get_points_array(self, file_path):
-    cloud_info = self.openGLWidget.point_clouds.get(file_path)
-    if not cloud_info:
-        return None
-
-    points = cloud_info.get('full_data')
-    if points is None:
-        points = cloud_info.get('data')
-
-    if isinstance(points, o3d.geometry.PointCloud):
-        points = np.asarray(points.points)
-    elif points is not None:
-        points = np.asarray(points)
-
-    if points is None or points.ndim != 2 or points.shape[1] < 3:
-        return None
-
-    return points[:, :3]
+    return get_points_array_from_clouds(self.openGLWidget.point_clouds, file_path)

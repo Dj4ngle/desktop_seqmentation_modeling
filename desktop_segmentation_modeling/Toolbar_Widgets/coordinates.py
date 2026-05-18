@@ -213,8 +213,9 @@ def run_coordinates(self):
     # Подключаем сигналы для обновления UI
     # file_loaded - загружает файл в UI (выполняется в главном потоке через сигнал)
     def on_file_loaded(file_path):
-        self.openGLWidget.load_point_cloud(file_path)
         self.add_file_to_list_widget(file_path)
+        if file_path.lower().endswith(('.las', '.pcd')):
+            self.load_point_cloud_async(file_path)
     
     # finished - обработчик завершения расчётов
     def on_finished():

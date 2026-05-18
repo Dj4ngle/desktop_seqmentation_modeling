@@ -1,23 +1,130 @@
 import os
 import open3d as o3d
-import pandas as pd
 import numpy as np
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QMainWindow, QFileDialog, QListWidgetItem, QCheckBox, QApplication, QLabel, QSizePolicy
 from .Toolbar_Widgets import modeling
 from desktop_segmentation_modeling.config import base_path
+from desktop_segmentation_modeling.point_cloud_data import get_points_array_from_clouds
 from .Toolbar_Widgets.design import Ui_MainWindow
 from .Toolbar_Widgets.console_manager import ConsoleManager
 from .menu_bar import MenuBar
 from .Toolbar.tool_bar import ToolBar
-import pylas
+
+
+class PointCloudLoadWorker(QThread):
+    loaded = pyqtSignal(str, object, object, object, object)
+    error = pyqtSignal(str, str)
+
+    def __init__(self, file_path):
+        super().__init__()
+        self.file_path = file_path
+
+    def run(self):
+        try:
+            file_extension = os.path.splitext(self.file_path)[1].lower()
+            if file_extension == ".las":
+                points, colors, file_metadata = self.load_las()
+            elif file_extension == ".pcd":
+                points, colors, file_metadata = self.load_pcd()
+            else:
+                self.error.emit(self.file_path, f"Неподдерживаемый формат файла: {file_extension}")
+                return
+
+            render_metadata = self.build_render_metadata(points)
+            self.loaded.emit(self.file_path, points, colors, render_metadata, file_metadata)
+        except Exception as error:
+            self.error.emit(self.file_path, str(error))
+
+    def load_las(self):
+        import pylas
+
+        las = pylas.read(self.file_path)
+        points = np.column_stack((las.x, las.y, las.z))
+
+        has_rgb = all(hasattr(las, name) for name in ("red", "green", "blue"))
+        if has_rgb:
+            colors = np.column_stack((las.red, las.green, las.blue)).astype(np.float32)
+            color_scale = 65535.0 if np.max(colors) > 255 else 255.0
+            colors = np.clip(colors / color_scale, 0.0, 1.0)
+        else:
+            colors = np.ones((len(points), 3), dtype=np.float32)
+
+        file_metadata = [
+            ("Версия", getattr(las.header, "version", "неизвестно")),
+            ("Формат точек", getattr(getattr(las.header, "point_format", None), "id", "неизвестно")),
+            ("Scale", self.format_sequence(getattr(las.header, "scales", []))),
+            ("Offset", self.format_sequence(getattr(las.header, "offsets", []))),
+        ]
+
+        intensity = self.get_las_dimension(las, "intensity")
+        if intensity is not None and len(intensity) > 0:
+            file_metadata.extend([
+                ("Intensity min", int(np.min(intensity))),
+                ("Intensity max", int(np.max(intensity))),
+                ("Intensity mean", f"{np.mean(intensity):.1f}"),
+            ])
+
+        classification = self.get_las_dimension(las, "classification")
+        if classification is not None and len(classification) > 0:
+            file_metadata.append(("Классов", len(np.unique(classification))))
+
+        return_number = self.get_las_dimension(las, "return_number")
+        if return_number is not None and len(return_number) > 0:
+            file_metadata.append(("Returns", ", ".join(map(str, np.unique(return_number)))))
+
+        file_metadata.append(("RGB", "есть" if has_rgb else "нет"))
+
+        try:
+            crs = las.header.parse_crs()
+            if crs:
+                file_metadata.append(("CRS", str(crs)))
+        except Exception:
+            pass
+
+        return points, colors, file_metadata
+
+    def load_pcd(self):
+        pcd = o3d.io.read_point_cloud(self.file_path)
+        points = np.asarray(pcd.points)
+        colors = np.asarray(pcd.colors, dtype=np.float32) if pcd.has_colors() else np.ones_like(points, dtype=np.float32)
+        file_metadata = [
+            ("Цвета", "есть" if pcd.has_colors() else "нет"),
+            ("Нормали", "есть" if pcd.has_normals() else "нет"),
+            ("Источник", "файл"),
+        ]
+        return points, colors, file_metadata
+
+    def build_render_metadata(self, points):
+        min_bounds = np.min(points[:, :3], axis=0)
+        max_bounds = np.max(points[:, :3], axis=0)
+        size = max_bounds - min_bounds
+        return {
+            'min': min_bounds,
+            'max': max_bounds,
+            'center': (min_bounds + max_bounds) / 2,
+            'max_size': float(np.max(size)),
+        }
+
+    def get_las_dimension(self, las, name):
+        try:
+            return np.asarray(getattr(las, name))
+        except Exception:
+            return None
+
+    def format_sequence(self, values):
+        try:
+            return ", ".join(f"{float(value):.6g}" for value in values)
+        except Exception:
+            return "неизвестно"
 
 class MyMainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super(MyMainWindow, self).__init__()
         self.dock_widgets = {}
         self.current_dock = None
+        self.current_theme = "dark"
 
         self.setWindowIcon(QIcon(os.path.join(base_path, "images/Icon.png")))
 
@@ -90,6 +197,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.remove_button.clicked.connect(self.remove_selected_items)
 
         self.selected_files = []
+        self._point_cloud_load_workers = {}
         
         # Инициализация атрибута для DockWidget "Свойства"
         self.properties_dock = None
@@ -211,8 +319,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                     self.openGLWidget.load_model(file_path)
                     self.update_properties_dock(file_path)
                 elif file_extension == ".las" or file_extension == ".pcd":
-                    self.openGLWidget.load_point_cloud(file_path)
-                    self.update_properties_dock(file_path)
+                    self.load_point_cloud_async(file_path)
                 else:
                     # Работа с форматом csv
                     pass
@@ -226,6 +333,47 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                     self.openGLWidget.models[file_path]['active'] = False
                     self.openGLWidget.update()
                     self.clear_properties_dock()
+
+    def load_point_cloud_async(self, file_path):
+        if file_path in self.openGLWidget.vbo_data:
+            self.openGLWidget.point_clouds[file_path]['active'] = True
+            self.openGLWidget.scale_factor = self.openGLWidget.calculate_scale_factor_for_all()
+            self.openGLWidget.update()
+            self.update_properties_dock(file_path)
+            return
+
+        if file_path in self._point_cloud_load_workers:
+            print(f"Файл уже загружается: {file_path}")
+            return
+
+        worker = PointCloudLoadWorker(file_path)
+
+        def on_loaded(loaded_path, points, colors, render_metadata, file_metadata):
+            self.openGLWidget.load_point_cloud_from_arrays(
+                loaded_path,
+                points,
+                colors=colors,
+                full_data=points,
+                metadata=render_metadata,
+            )
+            self.openGLWidget.point_clouds[loaded_path]['file_metadata'] = file_metadata
+            self.update_properties_dock(loaded_path)
+            cleanup_worker(loaded_path)
+
+        def on_error(loaded_path, error_msg):
+            print(f"Ошибка загрузки облака точек {loaded_path}: {error_msg}")
+            cleanup_worker(loaded_path)
+
+        def cleanup_worker(loaded_path):
+            finished_worker = self._point_cloud_load_workers.pop(loaded_path, None)
+            if finished_worker:
+                finished_worker.deleteLater()
+
+        worker.loaded.connect(on_loaded)
+        worker.error.connect(on_error)
+        self._point_cloud_load_workers[file_path] = worker
+        print(f"Загрузка облака точек в фоновом потоке: {file_path}")
+        worker.start()
 
     def update_properties_dock(self, file_path):
         if file_path in self.openGLWidget.point_clouds:
@@ -263,7 +411,6 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
     def add_properties_section(self, title):
         label = QLabel(title)
         label.setStyleSheet(
-            "background-color: transparent; color: #CCCEDB; "
             "font-weight: bold; padding-top: 10px; padding-bottom: 4px;"
         )
         label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
@@ -273,7 +420,6 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         property_label = QLabel(f"{label}: {value}")
         property_label.setWordWrap(True)
         property_label.setStyleSheet(
-            "background-color: transparent; color: #CCCEDB; "
             "padding-top: 0px; padding-bottom: 0px; margin: 0px;"
         )
         property_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
@@ -297,23 +443,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         return properties
 
     def get_point_cloud_points(self, file_path):
-        cloud_info = self.openGLWidget.point_clouds.get(file_path)
-        if not cloud_info:
-            return None
-
-        points = cloud_info.get('full_data')
-        if points is None:
-            points = cloud_info.get('data')
-
-        if isinstance(points, o3d.geometry.PointCloud):
-            points = np.asarray(points.points)
-        elif points is not None:
-            points = np.asarray(points)
-
-        if points is None or points.ndim != 2 or points.shape[1] < 3:
-            return None
-
-        return points[:, :3]
+        return get_points_array_from_clouds(self.openGLWidget.point_clouds, file_path)
 
     def format_file_size(self, file_path):
         if not os.path.exists(file_path):
@@ -328,6 +458,10 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             size /= 1024
 
     def get_las_properties(self, file_path):
+        cached_metadata = self.openGLWidget.point_clouds.get(file_path, {}).get('file_metadata')
+        if cached_metadata is not None:
+            return cached_metadata
+
         if not os.path.exists(file_path):
             return [("Метаданные", "файл не найден на диске")]
 
@@ -378,6 +512,10 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             return None
 
     def get_pcd_properties(self, file_path):
+        cached_metadata = self.openGLWidget.point_clouds.get(file_path, {}).get('file_metadata')
+        if cached_metadata is not None:
+            return cached_metadata
+
         pcd = None
 
         if os.path.exists(file_path):
@@ -458,11 +596,16 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             file_extension = os.path.splitext(save_path)[1]
 
             if file_extension == ".las":
+                import pylas
+
                 las = pylas.read(file_path)
                 las.write(save_path)
                 print(f"Файл: {file_path} сохранён как: {save_path}")
             elif file_extension == ".pcd":
-                points = self.openGLWidget.vbo_data[file_path][0]
+                points = self.get_point_cloud_points(file_path)
+                if points is None:
+                    print(f"Не удалось получить точки для сохранения: {file_path}")
+                    return
                 # Создаем объект PointCloud
                 pcd = o3d.geometry.PointCloud()
                 # Устанавливаем точки в объект PointCloud
@@ -471,6 +614,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 print(f"Файл: {file_path} сохранён как: {save_path}")
 
             elif file_extension == ".csv":
+                import pandas as pd
+
                 # Сохраняем файл как .csv
                 df = pd.read_csv(file_path)
                 df.to_csv(save_path, index=False, sep=";")
@@ -487,6 +632,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 base_name, original_ext = os.path.splitext(file_name)
 
                 if original_ext == ".las":
+                    import pylas
+
                     # Сохраняем файл как .las
                     output_path = os.path.join(save_dir, file_name)
                     las = pylas.read(file_path)
@@ -496,7 +643,10 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 elif original_ext == ".pcd":
                     # Сохраняем файл как .pcd
                     output_path = os.path.join(save_dir, file_name)
-                    points = self.openGLWidget.vbo_data[file_path][0]
+                    points = self.get_point_cloud_points(file_path)
+                    if points is None:
+                        print(f"Не удалось получить точки для сохранения: {file_path}")
+                        continue
                     # Создаем объект PointCloud
                     pcd = o3d.geometry.PointCloud()
                     # Устанавливаем точки в объект PointCloud
@@ -505,6 +655,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                     print(f"Файл: {file_path} сохранён как: {output_path}")
 
                 elif original_ext == ".csv":
+                    import pandas as pd
+
                     # Сохраняем файл как .csv
                     output_path = os.path.join(save_dir, file_name)
                     df = pd.read_csv(file_path)

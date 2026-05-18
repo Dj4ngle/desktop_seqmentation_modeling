@@ -47,7 +47,7 @@ class RAM():
         return idnames
 
     def accumulating(self):
-        myRAM_list = [[0,0,0,0,0]]
+        ram_chunks = []
         for fname in tqdm(os.listdir(self.path_file)):
             if fname.endswith('.pcd'):
 
@@ -92,10 +92,13 @@ class RAM():
                             
                             myRAM_l = [list(point) + [label] for point, label in zip(c_points, labels_indices_list)]
                             myRAM_l = np.asarray(myRAM_l)
-                            myRAM_list = np.concatenate((myRAM_list, myRAM_l), axis=0)
+                            ram_chunks.append(myRAM_l)
                             ci += 1
 
-        myRAM_list = np.delete(myRAM_list, 0, axis=0)
+        if ram_chunks:
+            myRAM_list = np.concatenate(ram_chunks, axis=0)
+        else:
+            myRAM_list = np.empty((0, 5))
         self.ram = pd.DataFrame(myRAM_list, columns=['X', 'Y', 'Z', 'I', 'L'])
 
     def exploitation(self, path_file_save):

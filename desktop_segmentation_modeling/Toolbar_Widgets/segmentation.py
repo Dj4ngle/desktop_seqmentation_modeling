@@ -2,12 +2,11 @@ import os
 import random
 import numpy as np
 from sklearn.cluster import DBSCAN
-from OpenGL.arrays import vbo
-import open3d as o3d
 
 from PyQt6.QtWidgets import (QDockWidget, QLineEdit, QVBoxLayout, QWidget, QPushButton, QLabel, QListWidget)
 from PyQt6.QtCore import Qt, QRegularExpression, QThread, pyqtSignal
 from PyQt6.QtGui import QRegularExpressionValidator
+from desktop_segmentation_modeling.point_cloud_data import get_points_array_from_clouds
 
 
 class SegmentationWorker(QThread):
@@ -112,15 +111,12 @@ def run_segmentation(self):
     def on_finished(segments):
         for segment_file_path, segment_points, colors in segments:
             print(segment_file_path)
-            self.openGLWidget.point_clouds[segment_file_path] = {
-                'active': True,
-                'data': segment_points,
-                'full_data': segment_points,
-            }
-
-            point_vbo = vbo.VBO(segment_points.astype(np.float32))
-            color_vbo = vbo.VBO(colors.astype(np.float32))
-            self.openGLWidget.vbo_data[segment_file_path] = (point_vbo, color_vbo, len(segment_points))
+            self.openGLWidget.load_point_cloud_from_arrays(
+                segment_file_path,
+                segment_points,
+                colors=colors,
+                full_data=segment_points,
+            )
             self.add_file_to_list_widget(segment_file_path)
 
         self.openGLWidget.update()
@@ -141,20 +137,4 @@ def run_segmentation(self):
 
 
 def get_points_array(self, file_path):
-    cloud_info = self.openGLWidget.point_clouds.get(file_path)
-    if not cloud_info:
-        return None
-
-    points = cloud_info.get('full_data')
-    if points is None:
-        points = cloud_info.get('data')
-
-    if isinstance(points, o3d.geometry.PointCloud):
-        points = np.asarray(points.points)
-    elif points is not None:
-        points = np.asarray(points)
-
-    if points is None or points.ndim != 2 or points.shape[1] < 3:
-        return None
-
-    return points[:, :3]
+    return get_points_array_from_clouds(self.openGLWidget.point_clouds, file_path)

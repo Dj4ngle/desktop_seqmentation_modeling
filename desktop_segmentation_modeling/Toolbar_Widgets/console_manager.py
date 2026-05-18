@@ -1,6 +1,6 @@
 import sys
 from datetime import datetime, timedelta
-from PyQt6.QtCore import Qt, QObject, pyqtSignal
+from PyQt6.QtCore import Qt, QObject, pyqtSignal, QTimer
 from PyQt6.QtWidgets import QDockWidget, QPlainTextEdit
 
 
@@ -28,14 +28,29 @@ class ConsoleWidget(QPlainTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setReadOnly(True)
+        self.setMaximumBlockCount(2000)
         self.writer = ConsoleWriter(self)
+        self._pending_messages = []
+        self._flush_timer = QTimer(self)
+        self._flush_timer.setInterval(75)
+        self._flush_timer.timeout.connect(self._flush_pending_messages)
 
     def write(self, message):
-        """Потокобезопасная запись через сигнал"""
-        self.writer.message_signal.emit(message)
+        self._pending_messages.append(message)
+        if not self._flush_timer.isActive():
+            self._flush_timer.start()
 
     def flush(self):
-        pass
+        self._flush_pending_messages()
+
+    def _flush_pending_messages(self):
+        if not self._pending_messages:
+            self._flush_timer.stop()
+            return
+
+        message = ''.join(self._pending_messages)
+        self._pending_messages = []
+        self.writer.message_signal.emit(message)
 
 
 class ConsoleManager:

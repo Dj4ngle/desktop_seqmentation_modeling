@@ -21,3 +21,8 @@ venv-bak/
 
 .idea/
 tmp/
+build/
+dist/
+*.egg-info/
+*.display.npz
+*.log

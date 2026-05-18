@@ -94,6 +94,7 @@ def segmentation_vor(ss, tr_val, multiplier, make_binding = True):
             LOW = pc_poly.points.min(axis=0)[2]
             STEP = ss.STEP
             HIGH = LOW + STEP
+            pc_poly_zmax = pc_poly.points.max(axis=0)[2]
             z_thresholds = np.array(ss.z_thresholds)
             eps_steps = np.array(ss.eps_steps)
             min_pts = np.array(ss.min_pts)
@@ -105,9 +106,11 @@ def segmentation_vor(ss, tr_val, multiplier, make_binding = True):
 
             filename_out = str(i).rjust(4, '0') + '.pcd'
             filename_out = f"tree_{filename_out}"
+            result_points_chunks = []
+            result_intensity_chunks = []
 
-            for zc in tqdm(range(2*int(pc_poly.points.max(axis=0)[2]//STEP))):
-                idx = np.searchsorted(z_thresholds * pc_poly.points.max(axis=0)[2], min(LOW,pc_poly.points.max(axis=0)[2]), side='left')
+            for zc in tqdm(range(2*int(pc_poly_zmax//STEP))):
+                idx = np.searchsorted(z_thresholds * pc_poly_zmax, min(LOW, pc_poly_zmax), side='left')
                 eps_step = eps_steps[idx]
                 min_pt = min_pts[idx]
     
@@ -122,14 +125,15 @@ def segmentation_vor(ss, tr_val, multiplier, make_binding = True):
                 HIGH = LOW + STEP
 
                 if pc_l_p.points.shape[0]>1:
-                    if j==0:
-                        result_points = np.copy(pc_l_p.points)
-                        result_intensity = np.copy(pc_l_p.intensity)
-                    else: 
-                        result_points = np.vstack((result_points, pc_l_p.points))
-                        result_intensity = np.hstack((result_intensity, pc_l_p.intensity))
+                    result_points_chunks.append(pc_l_p.points)
+                    result_intensity_chunks.append(pc_l_p.intensity)
                     j += 1
 
+            if not result_points_chunks:
+                continue
+
+            result_points = np.concatenate(result_points_chunks, axis=0)
+            result_intensity = np.concatenate(result_intensity_chunks, axis=0)
             pc_result = PCD_TREE(points = result_points, intensity = result_intensity, coordinate = pc_poly.coordinate)
             pc_result.unique()
             file_name_data_out = os.path.join(path_file_save, filename_out) 

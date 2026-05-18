@@ -3,8 +3,8 @@ from PyQt6.QtWidgets import (QDockWidget, QCheckBox, QVBoxLayout, QWidget,
                              QGridLayout, QDoubleSpinBox, QScrollArea)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 import numpy as np
-import open3d as o3d  # Используем Open3D для обработки облаков точек
 import os
+from desktop_segmentation_modeling.point_cloud_data import get_points_array_from_clouds
 
 
 class TaxationWorker(QThread):
@@ -73,23 +73,7 @@ class TreeTaxationLogic:
         self.opengl_widget = opengl_widget
 
     def get_points(self, filename):
-        cloud_info = self.opengl_widget.point_clouds.get(filename)
-        if not cloud_info:
-            return None
-
-        points = cloud_info.get('full_data')
-        if points is None:
-            points = cloud_info.get('data')
-
-        if isinstance(points, o3d.geometry.PointCloud):
-            points = np.asarray(points.points)
-        elif points is not None:
-            points = np.asarray(points)
-
-        if points is None or points.ndim != 2 or points.shape[1] < 3 or len(points) == 0:
-            return None
-
-        return points[:, :3]
+        return get_points_array_from_clouds(self.opengl_widget.point_clouds, filename)
 
     def calculate_tree_parameters(self, filename, calculate_dbh=True, calculate_height=True):
         """
@@ -133,11 +117,6 @@ class TreeTaxationLogic:
             if len(dbh_points) < 10:
                 results['DBH'] = "Недостаточно точек для DBH"
             else:
-                # Используем RANSAC для подгонки круга в плоскости XY
-                # Создаем облако точек Open3D для подгонки
-                pcd_section = o3d.geometry.PointCloud()
-                pcd_section.points = o3d.utility.Vector3dVector(dbh_points)
-
                 # Проекция на плоскость XY
                 # DBH = диаметр, поэтому подгоняем круг к проекции точек
 
@@ -211,8 +190,6 @@ def taxation_dock_widget(self):
         self.results_label.setWordWrap(True)  # Перенос текста
         self.results_label.setStyleSheet("""
             QLabel {
-                background-color: #3F3F46;
-                color: #CCCEDB;
                 padding: 5px;
                 border-radius: 3px;
             }
@@ -222,11 +199,7 @@ def taxation_dock_widget(self):
         scroll_area = QScrollArea()
         scroll_area.setStyleSheet("""
             QScrollArea {
-                background-color: #3F3F46;
-                border: 1px solid #494950;
-            }
-            QScrollArea > QWidget > QWidget {
-                background-color: #3F3F46;
+                border: 1px solid palette(mid);
             }
         """)
         scroll_area.setWidget(self.results_label)

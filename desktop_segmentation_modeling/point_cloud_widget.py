@@ -2,10 +2,7 @@ from OpenGL.arrays import vbo
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from PyQt6.QtCore import Qt, QPointF
 from OpenGL.GL import *
-import open3d as o3d
 import numpy as np
-import laspy
-import pywavefront
 import os
 
 class OpenGLWidget(QOpenGLWidget):
@@ -20,6 +17,8 @@ class OpenGLWidget(QOpenGLWidget):
         self.rotation_z = 1
         self.rotation_mode = "Z"
         self.point_cloud_position = QPointF(0, 0)  # Текущее положение облака точек
+        self.background_color = (0.0, 0.0, 0.0, 1.0)
+        self.use_light_background = False
 
         self.vbo = None
         self.num_points = 0
@@ -27,6 +26,7 @@ class OpenGLWidget(QOpenGLWidget):
 
         self.vbo_data = {}
         self.vbo_data_models = {}
+        self.render_metadata = {}
 
 
     def load_point_cloud(self, filename):
@@ -42,10 +42,14 @@ class OpenGLWidget(QOpenGLWidget):
         # Загрузка и кэширование данных
         file_extension = os.path.splitext(filename)[1].lower()
         if file_extension == '.las':
+            import laspy
+
             las = laspy.read(filename)
-            points = np.vstack((las.x, las.y, las.z)).transpose()
-            colors = np.vstack((las.red, las.green, las.blue)).transpose() / 255.0
+            points = np.column_stack((las.x, las.y, las.z))
+            colors = np.column_stack((las.red, las.green, las.blue)) / 255.0
         elif file_extension == '.pcd':
+            import open3d as o3d
+
             pcd = o3d.io.read_point_cloud(filename)
             points = np.asarray(pcd.points)
             colors = np.ones_like(points)  # Белый цвет по умолчанию
@@ -55,15 +59,22 @@ class OpenGLWidget(QOpenGLWidget):
             print("Unsupported file format")
             return
 
-        raw_points = points.copy()
-        points_centered = points - np.mean(points, axis=0)
+        raw_points = np.asarray(points)
+        points_centered = self.center_points_for_display(raw_points)
+        colors = np.asarray(colors, dtype=np.float32)
 
         # Создание и сохранение VBO
-        point_vbo = vbo.VBO(np.array(points_centered, dtype=np.float32))
-        color_vbo = vbo.VBO(np.array(colors, dtype=np.float32))
+        point_vbo = vbo.VBO(points_centered)
+        color_vbo = vbo.VBO(colors)
 
         self.vbo_data[filename] = (point_vbo, color_vbo, len(points_centered))
-        self.point_clouds[filename] = {'active': True, 'data': points_centered, 'full_data': raw_points}
+        self.point_clouds[filename] = {
+            'active': True,
+            'data': points_centered,
+            'full_data': raw_points,
+            'metadata': self.build_render_metadata(raw_points),
+        }
+        self.render_metadata[filename] = self.point_clouds[filename]['metadata']
 
         self.scale_factor = self.calculate_scale_factor_for_all()
         self.update()
@@ -79,6 +90,8 @@ class OpenGLWidget(QOpenGLWidget):
 
         file_extension = os.path.splitext(filename)[1].lower()
         if file_extension == '.obj':
+            import pywavefront
+
             scene = pywavefront.Wavefront(filename, collect_faces=True)
             vertices = []
             total_faces = 0
@@ -92,15 +105,17 @@ class OpenGLWidget(QOpenGLWidget):
             print("Unsupported file format")
             return
 
-        points_centered = points - np.mean(points, axis=0)
+        points_centered = self.center_points_for_display(points)
         point_vbo = vbo.VBO(points_centered)
         color_vbo = vbo.VBO(colors)
         self.vbo_data_models[filename] = (point_vbo, color_vbo, len(points_centered))
         self.models[filename] = {
             'active': True,
             'data': points_centered,
-            'num_polygons': total_faces
+            'num_polygons': total_faces,
+            'metadata': self.build_render_metadata(points_centered),
         }
+        self.render_metadata[filename] = self.models[filename]['metadata']
         self.scale_factor = self.calculate_scale_factor_for_all()
         self.update()
 
@@ -122,29 +137,77 @@ class OpenGLWidget(QOpenGLWidget):
         self.models[filename] = {
             'active': True,
             'data': points,
-            'num_polygons': len(points) // 3
+            'num_polygons': len(points) // 3,
+            'metadata': self.build_render_metadata(points),
         }
+        self.render_metadata[filename] = self.models[filename]['metadata']
         self.scale_factor = self.calculate_scale_factor_for_all()
         self.update()
 
+    def load_point_cloud_from_arrays(self, filename, points, colors=None, full_data=None, metadata=None):
+        points = np.asarray(points, dtype=np.float32)
+        if len(points) == 0:
+            print(f"Облако точек {filename} пустое")
+            return
+
+        if full_data is None:
+            full_data = points
+        full_data = np.asarray(full_data)
+
+        points_centered = self.center_points_for_display(points)
+        if colors is None:
+            colors = np.ones_like(points_centered, dtype=np.float32)
+        else:
+            colors = np.asarray(colors, dtype=np.float32)
+
+        point_vbo = vbo.VBO(points_centered)
+        color_vbo = vbo.VBO(colors)
+        if metadata is None:
+            metadata = self.build_render_metadata(full_data)
+
+        self.vbo_data[filename] = (point_vbo, color_vbo, len(points_centered))
+        self.point_clouds[filename] = {
+            'active': True,
+            'data': points_centered,
+            'full_data': full_data,
+            'metadata': metadata,
+        }
+        self.render_metadata[filename] = metadata
+        self.scale_factor = self.calculate_scale_factor_for_all()
+        self.update()
+
+    def center_points_for_display(self, points):
+        points = np.asarray(points, dtype=np.float32)
+        return points - np.mean(points, axis=0, dtype=np.float64).astype(np.float32)
+
+    def build_render_metadata(self, points):
+        points = np.asarray(points)
+        if points.size == 0:
+            return {'min': None, 'max': None, 'center': None, 'max_size': 0.0}
+
+        min_bounds = np.min(points[:, :3], axis=0)
+        max_bounds = np.max(points[:, :3], axis=0)
+        size = max_bounds - min_bounds
+        return {
+            'min': min_bounds,
+            'max': max_bounds,
+            'center': (min_bounds + max_bounds) / 2,
+            'max_size': float(np.max(size)),
+        }
+
     def calculate_scale_factor_for_all(self):
-        max_cloud = 0
-        max_model = 0
+        max_size = 0.0
 
-        if self.vbo_data:
-            for key, pcd in self.vbo_data.items():
-                if self.point_clouds[key]['active']:
-                    points = pcd[0]
-                    size = np.max(points, axis=0) - np.min(points, axis=0)
-                    max_cloud = max(max_cloud, np.max(size))
-        if self.vbo_data_models:
-            for key, model in self.vbo_data_models.items():
-                if self.models[key]['active']:
-                    points = model[0]
-                    size = np.max(points, axis=0) - np.min(points, axis=0)
-                    max_model = max(max_model, np.max(size))
+        for key, cloud in self.point_clouds.items():
+            if cloud.get('active'):
+                metadata = cloud.get('metadata') or self.render_metadata.get(key)
+                max_size = max(max_size, metadata.get('max_size', 0.0) if metadata else 0.0)
 
-        max_size = max(max_cloud, max_model)
+        for key, model in self.models.items():
+            if model.get('active'):
+                metadata = model.get('metadata') or self.render_metadata.get(key)
+                max_size = max(max_size, metadata.get('max_size', 0.0) if metadata else 0.0)
+
         scale_factor = 1.5 / max_size if max_size != 0 else 1
         return scale_factor
         
@@ -176,11 +239,22 @@ class OpenGLWidget(QOpenGLWidget):
         self.update()  # Обновляем виджет, чтобы отобразить изменения
 
     def initializeGL(self):
-        glClearColor(0, 0, 0, 1)
+        glClearColor(*self.background_color)
         glEnable(GL_DEPTH_TEST)
 
         self.vbo = vbo.VBO(np.array([], dtype=np.float32))
         self.color_vbo = vbo.VBO(np.array([], dtype=np.float32))
+
+    def set_background_color(self, red, green, blue, alpha=1.0):
+        self.background_color = (red, green, blue, alpha)
+        self.use_light_background = (red + green + blue) / 3 > 0.5
+        if self.isValid():
+            self.makeCurrent()
+            try:
+                glClearColor(*self.background_color)
+            finally:
+                self.doneCurrent()
+        self.update()
 
     def paintGL(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -201,16 +275,22 @@ class OpenGLWidget(QOpenGLWidget):
                     glVertexPointer(3, GL_FLOAT, 0, None)
                     glEnableClientState(GL_VERTEX_ARRAY)
 
-                    color_vbo.bind()
-                    glColorPointer(3, GL_FLOAT, 0, None)
-                    glEnableClientState(GL_COLOR_ARRAY)
+                    if self.use_light_background:
+                        glColor3f(0.05, 0.05, 0.05)
+                    else:
+                        color_vbo.bind()
+                        glColorPointer(3, GL_FLOAT, 0, None)
+                        glEnableClientState(GL_COLOR_ARRAY)
 
                     glDrawArrays(GL_POINTS, 0, num_points)
 
                     glDisableClientState(GL_VERTEX_ARRAY)
-                    glDisableClientState(GL_COLOR_ARRAY)
+                    if self.use_light_background:
+                        glColor3f(1.0, 1.0, 1.0)
+                    else:
+                        glDisableClientState(GL_COLOR_ARRAY)
+                        color_vbo.unbind()
                     point_vbo.unbind()
-                    color_vbo.unbind()
 
         glEnableClientState(GL_VERTEX_ARRAY)
         # Отрисовка всех моделей
@@ -221,8 +301,11 @@ class OpenGLWidget(QOpenGLWidget):
                 vertex_vbo.bind()
                 glVertexPointer(3, GL_FLOAT, 0, None)
 
-                color_vbo.bind()
-                glColorPointer(3, GL_FLOAT, 0, None)
+                if self.use_light_background:
+                    glColor3f(0.05, 0.05, 0.05)
+                else:
+                    color_vbo.bind()
+                    glColorPointer(3, GL_FLOAT, 0, None)
                 glPushMatrix()
 
                 # Отрисовываем с использованием индексного буфера
@@ -231,11 +314,13 @@ class OpenGLWidget(QOpenGLWidget):
                 glPopMatrix()
 
                 vertex_vbo.unbind()
-                color_vbo.unbind()
+                if self.use_light_background:
+                    glColor3f(1.0, 1.0, 1.0)
+                else:
+                    color_vbo.unbind()
 
         glDisableClientState(GL_VERTEX_ARRAY)
         glPopMatrix()
-        self.update()
 
     def set_scale_factor(self, scale):
         self.scale_factor = scale

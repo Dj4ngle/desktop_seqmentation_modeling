@@ -15,7 +15,10 @@ import os
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
-import desktop_segmentation_modeling
+
+
+SPECIES_NAMES = ['Tree', 'Not_Tree']
+NUM_CLASSES = len(SPECIES_NAMES)
 
 def farthest_point_sample(xyz, npoint):
     device = xyz.device
@@ -34,68 +37,79 @@ def farthest_point_sample(xyz, npoint):
     return centroids
 
 
-def test(src, model_name):
+def get_model_path(model_name):
     # Получаем путь к файлам пакета для корректной работы при установке как библиотека
-    # Используем __file__ пакета для определения пути
-    package_file = Path(desktop_segmentation_modeling.__file__).resolve()
-    package_dir = package_file.parent  # desktop_segmentation_modeling
-    model_path = package_dir / 'Coordinates' / 'predictmdl' / 'checkpoints' / model_name / 'models' / 'model.t7'
-    model_path = str(model_path)
+    package_dir = Path(__file__).resolve().parents[1]  # desktop_segmentation_modeling
+    return str(package_dir / 'Coordinates' / 'predictmdl' / 'checkpoints' / model_name / 'models' / 'model.t7')
 
-    species_names = ['Tree','Not_Tree']
-    test_true = []
-    test_pred = []
 
-    try:
+class StumpPredictor:
+    def __init__(self, model_name):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = get_model(NUM_CLASSES, normal_channel=False).to(self.device)
+        self.model.load_state_dict(torch.load(get_model_path(model_name), map_location=self.device))
+        self.model.eval()
+
+    def prepare_points(self, src):
         pc = PyntCloud.from_file(src)
-        points = pc.points.loc[:,["x","y","z"]].values
-        points = np.array([points])
-
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        points = torch.Tensor(points).to(device)
+        points = pc.points.loc[:, ["x", "y", "z"]].values
+        points = torch.as_tensor(np.array([points]), dtype=torch.float32, device=self.device)
         centroids = farthest_point_sample(points, 2048)
-        pc_sampled = points[0][centroids[0]]
-        pc_sampled = pc_sampled.cpu().detach().numpy()
+        pc_sampled = points[0][centroids[0]].cpu().numpy()
+        return pcu.tree_normalize(np.array([pc_sampled]))[0]
 
-        X_test = np.array([pc_sampled])
-        y_test = [0]
+    def predict_batch(self, src_paths, batch_size=16):
+        labels = []
+        batch = []
 
-        X_test = pcu.tree_normalize(X_test)
-        int2name = { i:name for i, name in enumerate(species_names)}
+        for src in src_paths:
+            try:
+                batch.append(self.prepare_points(src))
+            except Exception as error:
+                print("Exception:", str(error))
+                labels.append(-1)
+                continue
 
-        NUM_CLASSES = len(int2name)
+            if len(batch) >= batch_size:
+                labels.extend(self._predict_prepared(batch))
+                batch = []
 
-        model = get_model(NUM_CLASSES,normal_channel=False).to(device)
-        model.load_state_dict(torch.load(model_path, map_location=device))
-        model = model.eval()
+        if batch:
+            labels.extend(self._predict_prepared(batch))
 
-        data, label = torch.tensor(X_test, device=device), torch.tensor(y_test, device=device)
-        data = data.permute(0, 2, 1)
-        logits, trans_feat = model(data)
-        preds = logits.max(dim=1)[1].detach()
-        test_true.append(label.cpu().numpy())
-        test_pred.append(preds.cpu().numpy())
+        return labels
 
-        if test_pred[0][0] == 1:
-            ans = 0 #"Это не дерево"
-        else:
-            ans = 1 #"Это дерево"
-    except Exception as e:
-        print("Exception:", str(e))
-        print("test_true:", test_true)
-        print("test_pred:", test_pred)
-        ans = -1
-    return ans
-    # return test_pred[0][0]
+    def _predict_prepared(self, prepared_points):
+        with torch.no_grad():
+            data = torch.as_tensor(np.asarray(prepared_points), dtype=torch.float32, device=self.device)
+            data = data.permute(0, 2, 1)
+            logits, _ = self.model(data)
+            preds = logits.max(dim=1)[1].detach().cpu().numpy()
+
+        # Model class 1 means Not_Tree in the existing convention.
+        return [0 if pred == 1 else 1 for pred in preds]
+
+
+def test(src, model_name, predictor=None):
+    if predictor is None:
+        predictor = StumpPredictor(model_name)
+
+    labels = predictor.predict_batch([src], batch_size=1)
+    return labels[0] if labels else -1
+
+
+def predict_paths(src_paths, model_name, batch_size=16):
+    predictor = StumpPredictor(model_name)
+    return predictor.predict_batch(src_paths, batch_size=batch_size)
 
 def predict(path_file, model_name):
     names = []
-    labels = []
+    src_paths = []
     for filename in tqdm(os.listdir(path_file)):
         if filename.endswith('.pcd'):
-            src = os.path.join(path_file,filename)
-            label = test(src, model_name)
             names.append(filename)
-            labels.append(label)     
-    bd = pd.DataFrame({"Name_tree": names,"Label": labels})
+            src_paths.append(os.path.join(path_file, filename))
+
+    labels = predict_paths(src_paths, model_name)
+    bd = pd.DataFrame({"Name_tree": names, "Label": labels})
     bd.to_csv(os.path.join(path_file,'predict_' + model_name + '.csv'), index = False, sep=';')
