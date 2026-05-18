@@ -18,6 +18,25 @@ class TreeTaxationLogic:
     def __init__(self, opengl_widget):
         self.opengl_widget = opengl_widget
 
+    def get_points(self, filename):
+        cloud_info = self.opengl_widget.point_clouds.get(filename)
+        if not cloud_info:
+            return None
+
+        points = cloud_info.get('full_data')
+        if points is None:
+            points = cloud_info.get('data')
+
+        if isinstance(points, o3d.geometry.PointCloud):
+            points = np.asarray(points.points)
+        elif points is not None:
+            points = np.asarray(points)
+
+        if points is None or points.ndim != 2 or points.shape[1] < 3 or len(points) == 0:
+            return None
+
+        return points[:, :3]
+
     def calculate_tree_parameters(self, filename, calculate_dbh=True, calculate_height=True):
         """
         Рассчитывает параметры для выбранного облака точек.
@@ -27,12 +46,11 @@ class TreeTaxationLogic:
         :param calculate_height: Флаг для расчета Высоты.
         :return: Словарь с результатами {'DBH': value, 'Height': value} или None в случае ошибки.
         """
-        if filename not in self.opengl_widget.point_clouds or not self.opengl_widget.point_clouds[filename][
-                                                                      'full_data'] is not None:
+        points = self.get_points(filename)
+        if points is None:
             return None, "Облако точек не найдено или не имеет полных данных."
 
         # Используем "полные" (неотцентрированные) данные для более точных расчетов высот
-        points = self.opengl_widget.point_clouds[filename]['full_data']
 
         # Если облако точек LAS, оно может быть в метрах или футах, но мы предполагаем,
         # что оси X, Y, Z согласованы и Z соответствует высоте.
@@ -200,10 +218,10 @@ def run_taxation_calculation(self):
     # Создаем временный класс или обновляем существующий
     class TaxationLogicWithDBHHeight(TreeTaxationLogic):
         def calculate_tree_parameters(self, filename, calculate_dbh=True, calculate_height=True, dbh_height=1.3):
-            if filename not in self.opengl_widget.point_clouds or not self.opengl_widget.point_clouds[filename]['full_data'] is not None:
+            points = self.get_points(filename)
+            if points is None:
                 return None, "Облако точек не найдено или не имеет полных данных."
-            
-            points = self.opengl_widget.point_clouds[filename]['full_data']
+
             results = {}
             
             if calculate_height:

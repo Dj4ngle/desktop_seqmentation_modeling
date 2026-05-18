@@ -7,7 +7,6 @@ from PyQt6.QtCore import Qt
 from desktop_segmentation_modeling.Modeling.modeler import modeler
 from desktop_segmentation_modeling.Modeling.modeler2 import modeler2
 
-# TODO починить
 def show_default_modeling_widget(self):
     self.bpa_widget.show()
     self.mesh_widget.hide()
@@ -28,7 +27,9 @@ def modeling_dock_widget(self):
         self.bpa_radio.setChecked(True)
 
         # Подключение обработчика событий радиокнопок
-        self.method_radio_group.buttonClicked.connect(on_method_radio_button_clicked)
+        self.method_radio_group.buttonClicked.connect(
+            lambda button: on_method_radio_button_clicked(self, button)
+        )
 
         layout.addWidget(self.bpa_radio)
         layout.addWidget(self.mesh_radio)
@@ -145,7 +146,7 @@ def start_modeling2(self, slider1, slider2, slider3):
 
 def on_method_radio_button_clicked(self, button):
     if button == self.bpa_radio:
-        show_default_modeling_widget()
+        show_default_modeling_widget(self)
     elif button == self.mesh_radio:
         self.bpa_widget.hide()
         self.mesh_widget.show()

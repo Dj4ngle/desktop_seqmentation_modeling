@@ -1,7 +1,6 @@
 import os
 import open3d as o3d
 import pandas as pd
-from OpenGL.GL import glDeleteBuffers
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QMainWindow, QFileDialog, QListWidgetItem, QCheckBox, QApplication, QLabel
@@ -61,7 +60,9 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.toolbarsCreator.modelingAction.triggered.connect(lambda:
                                                                      self.toggle_dock_widget('modeling',
                                                                         Qt.DockWidgetArea.LeftDockWidgetArea))
-        self.toolbarsCreator.modelingAction.triggered.connect(modeling.show_default_modeling_widget)
+        self.toolbarsCreator.modelingAction.triggered.connect(
+            lambda checked=False: modeling.show_default_modeling_widget(self)
+        )
 
         self.toolbarsCreator.coordinatesAction.triggered.connect(lambda:
                                                               self.toggle_dock_widget('coordinates',
@@ -190,13 +191,14 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         # vbo_info предполагается быть кортежем (point_vbo, color_vbo, _)
         point_vbo, color_vbo, _ = vbo_info
 
-        # Освобождение ресурсов VBO для точек
-        if point_vbo is not None:
-            glDeleteBuffers(1, [point_vbo])
-
-        # Освобождение ресурсов VBO для цветов
-        if color_vbo is not None:
-            glDeleteBuffers(1, [color_vbo])
+        self.openGLWidget.makeCurrent()
+        try:
+            # PyOpenGL VBO objects should release their own OpenGL buffer ids.
+            for buffer in (point_vbo, color_vbo):
+                if buffer is not None:
+                    buffer.delete()
+        finally:
+            self.openGLWidget.doneCurrent()
 
     def checkbox_changed(self, state):
         checkbox = self.sender()
@@ -216,11 +218,11 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
             elif state == 0:  # Checkbox is unchecked
                 if file_path in self.openGLWidget.point_clouds:
-                    self.openGLWidget.point_clouds[file_path] = {'active': False, 'data': None}
+                    self.openGLWidget.point_clouds[file_path]['active'] = False
                     self.openGLWidget.update()
                     self.clear_properties_dock()
                 elif file_path in self.openGLWidget.models:
-                    self.openGLWidget.models[file_path] = {'active': False, 'data': None}
+                    self.openGLWidget.models[file_path]['active'] = False
                     self.openGLWidget.update()
                     self.clear_properties_dock()
 
