@@ -8,6 +8,10 @@ from .Toolbar_Widgets import modeling
 from desktop_segmentation_modeling.config import base_path
 from desktop_segmentation_modeling.point_cloud_data import get_points_array_from_clouds
 from desktop_segmentation_modeling.point_cloud_io import read_pcd_points_and_colors, get_pcd_file_properties
+from desktop_segmentation_modeling.point_cloud_colors import (
+    build_colors_from_intensity,
+    should_use_intensity_colors,
+)
 from .Toolbar_Widgets.design import Ui_MainWindow
 from .Toolbar_Widgets.console_manager import ConsoleManager
 from .menu_bar import MenuBar
@@ -80,6 +84,8 @@ class PointCloudLoadWorker(QThread):
 
         intensity = self.get_las_dimension(las, "intensity")
         if intensity is not None and len(intensity) > 0:
+            if should_use_intensity_colors(colors):
+                colors = build_colors_from_intensity(intensity)
             file_metadata.extend([
                 ("Intensity min", int(np.min(intensity))),
                 ("Intensity max", int(np.max(intensity))),
