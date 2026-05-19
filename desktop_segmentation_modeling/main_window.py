@@ -13,6 +13,25 @@ from .menu_bar import MenuBar
 from .Toolbar.tool_bar import ToolBar
 
 
+def get_las_point_format_id(las):
+    header = getattr(las, "header", None)
+    if header is None:
+        return "неизвестно"
+
+    point_format_id = getattr(header, "point_format_id", None)
+    if point_format_id is not None:
+        return point_format_id
+
+    point_format = getattr(header, "point_format", None)
+    if point_format is None:
+        return "неизвестно"
+
+    if isinstance(point_format, (int, np.integer)):
+        return int(point_format)
+
+    return getattr(point_format, "id", "неизвестно")
+
+
 class PointCloudLoadWorker(QThread):
     loaded = pyqtSignal(str, object, object, object, object)
     error = pyqtSignal(str, str)
@@ -53,7 +72,7 @@ class PointCloudLoadWorker(QThread):
 
         file_metadata = [
             ("Версия", getattr(las.header, "version", "неизвестно")),
-            ("Формат точек", getattr(getattr(las.header, "point_format", None), "id", "неизвестно")),
+            ("Формат точек", get_las_point_format_id(las)),
             ("Scale", self.format_sequence(getattr(las.header, "scales", []))),
             ("Offset", self.format_sequence(getattr(las.header, "offsets", []))),
         ]
@@ -198,6 +217,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
         self.selected_files = []
         self._point_cloud_load_workers = {}
+        self._cancelled_load_paths = set()
         
         # Инициализация атрибута для DockWidget "Свойства"
         self.properties_dock = None
@@ -261,53 +281,49 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
                 _, file_extension = os.path.splitext(file_path)
                 if file_extension == ".obj":
-                    # Удаляем точку из OpenGLWidget, если файл загружен
-                    if file_path and file_path in self.openGLWidget.models:
-                        del self.openGLWidget.models[file_path]
-                    if file_path and file_path in self.openGLWidget.vbo_data_models:
-                        # Получаем информацию о VBO, которую нужно удалить
-                        vbo_info = self.openGLWidget.vbo_data_models[file_path]
-
-                        # Вызываем функцию удаления VBO
-                        self.delete_vbo(vbo_info)
-
-                        # Удаляем запись из словаря
-                        del self.openGLWidget.vbo_data_models[file_path]
-
+                    self.cancel_point_cloud_load(file_path)
+                    self.openGLWidget.release_model(file_path)
                     print(f"Удалён файл: {file_path}")
 
-                elif file_extension == ".las" or file_extension == ".pcd":
-                    # Удаляем точку из OpenGLWidget, если файл загружен
-                    if file_path and file_path in self.openGLWidget.point_clouds:
-                        del self.openGLWidget.point_clouds[file_path]
-                    if file_path and file_path in self.openGLWidget.vbo_data:
-                        # Получаем информацию о VBO, которую нужно удалить
-                        vbo_info = self.openGLWidget.vbo_data[file_path]
-
-                        # Вызываем функцию удаления VBO
-                        self.delete_vbo(vbo_info)
-
-                        # Удаляем запись из словаря
-                        del self.openGLWidget.vbo_data[file_path]
-
+                elif file_extension in (".las", ".pcd"):
+                    self.cancel_point_cloud_load(file_path)
+                    self.openGLWidget.release_point_cloud(file_path)
                     print(f"Удалён файл: {file_path}")
 
-        
-        # Обновляем отображение в OpenGLWidget
+        if not self._has_visible_scene_content():
+            self.openGLWidget.reset_camera_view()
+        else:
+            self.openGLWidget.scale_factor = self.openGLWidget.calculate_scale_factor_for_all()
+
         self.openGLWidget.update()
 
-    def delete_vbo(self, vbo_info):
-        # vbo_info предполагается быть кортежем (point_vbo, color_vbo, _)
-        point_vbo, color_vbo, _ = vbo_info
+    def _has_visible_scene_content(self):
+        for path, cloud in self.openGLWidget.point_clouds.items():
+            if cloud.get('active') and path in self.openGLWidget.vbo_data:
+                return True
+        for path, model in self.openGLWidget.models.items():
+            if model.get('active') and path in self.openGLWidget.vbo_data_models:
+                return True
+        return False
 
-        self.openGLWidget.makeCurrent()
-        try:
-            # PyOpenGL VBO objects should release their own OpenGL buffer ids.
-            for buffer in (point_vbo, color_vbo):
-                if buffer is not None:
-                    buffer.delete()
-        finally:
-            self.openGLWidget.doneCurrent()
+    def _file_is_listed(self, file_path):
+        for index in range(self.listWidget.count()):
+            item = self.listWidget.item(index)
+            checkbox = self.listWidget.itemWidget(item)
+            if checkbox and checkbox.property("filePath") == file_path:
+                return True
+        return False
+
+    def cancel_point_cloud_load(self, file_path):
+        self._cancelled_load_paths.add(file_path)
+        worker = self._point_cloud_load_workers.pop(file_path, None)
+        if worker:
+            try:
+                worker.loaded.disconnect()
+                worker.error.disconnect()
+            except TypeError:
+                pass
+            worker.deleteLater()
 
     def checkbox_changed(self, state):
         checkbox = self.sender()
@@ -335,8 +351,18 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                     self.clear_properties_dock()
 
     def load_point_cloud_async(self, file_path):
+        self._cancelled_load_paths.discard(file_path)
+
         if file_path in self.openGLWidget.vbo_data:
-            self.openGLWidget.point_clouds[file_path]['active'] = True
+            if file_path not in self.openGLWidget.point_clouds:
+                self.openGLWidget.point_clouds[file_path] = {
+                    'active': True,
+                    'data': None,
+                    'full_data': None,
+                    'metadata': self.openGLWidget.render_metadata.get(file_path),
+                }
+            else:
+                self.openGLWidget.point_clouds[file_path]['active'] = True
             self.openGLWidget.scale_factor = self.openGLWidget.calculate_scale_factor_for_all()
             self.openGLWidget.update()
             self.update_properties_dock(file_path)
@@ -346,9 +372,15 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             print(f"Файл уже загружается: {file_path}")
             return
 
+        reset_view = not self._has_visible_scene_content()
         worker = PointCloudLoadWorker(file_path)
 
         def on_loaded(loaded_path, points, colors, render_metadata, file_metadata):
+            if loaded_path in self._cancelled_load_paths or not self._file_is_listed(loaded_path):
+                self._cancelled_load_paths.discard(loaded_path)
+                cleanup_worker(loaded_path)
+                return
+
             self.openGLWidget.load_point_cloud_from_arrays(
                 loaded_path,
                 points,
@@ -357,7 +389,12 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 metadata=render_metadata,
             )
             self.openGLWidget.point_clouds[loaded_path]['file_metadata'] = file_metadata
+            if reset_view:
+                self.openGLWidget.reset_camera_view()
+            else:
+                self.openGLWidget.scale_factor = self.openGLWidget.calculate_scale_factor_for_all()
             self.update_properties_dock(loaded_path)
+            self.openGLWidget.update()
             cleanup_worker(loaded_path)
 
         def on_error(loaded_path, error_msg):
@@ -472,7 +509,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
         properties = [
             ("Версия", getattr(las.header, "version", "неизвестно")),
-            ("Формат точек", getattr(getattr(las.header, "point_format", None), "id", "неизвестно")),
+            ("Формат точек", get_las_point_format_id(las)),
             ("Scale", self.format_sequence(getattr(las.header, "scales", []))),
             ("Offset", self.format_sequence(getattr(las.header, "offsets", []))),
         ]

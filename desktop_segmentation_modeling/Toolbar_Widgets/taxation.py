@@ -1,10 +1,13 @@
 from PyQt6.QtWidgets import (QDockWidget, QCheckBox, QVBoxLayout, QWidget,
                              QPushButton, QLabel, QMessageBox,
-                             QGridLayout, QDoubleSpinBox, QScrollArea)
+                             QGridLayout, QDoubleSpinBox, QScrollArea, QSizePolicy)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 import numpy as np
 import os
 from desktop_segmentation_modeling.point_cloud_data import get_points_array_from_clouds
+
+
+DEFAULT_TAXATION_MODEL = 'v5_cpl1-1024-rvc-s1024'
 
 
 class TaxationWorker(QThread):
@@ -20,10 +23,15 @@ class TaxationWorker(QThread):
 
     def run(self):
         try:
+            from desktop_segmentation_modeling.Coordinates.predict import StumpPredictor
+
+            predictor = StumpPredictor(DEFAULT_TAXATION_MODEL)
             all_results = []
             for file_path, points in self.selected_clouds:
                 filename = os.path.basename(file_path)
-                results = self.calculate_tree_parameters(points)
+                neural_prediction = predictor.predict_points_detailed(points, votes=5)
+                neural_label = neural_prediction["label"]
+                results = self.calculate_tree_parameters(points, neural_label, neural_prediction)
                 if not results:
                     all_results.append((filename, None, "Расчет не дал результатов"))
                 else:
@@ -33,32 +41,105 @@ class TaxationWorker(QThread):
         except Exception as error:
             self.error.emit(str(error))
 
-    def calculate_tree_parameters(self, points):
-        results = {}
+    def calculate_tree_parameters(self, points, neural_label, neural_prediction=None):
+        points = np.asarray(points, dtype=np.float32)
+        if points.ndim != 2 or points.shape[1] < 3 or len(points) == 0:
+            return None
+
+        z_min = float(np.min(points[:, 2]))
+        z_max = float(np.max(points[:, 2]))
+        total_height = z_max - z_min
+        if total_height <= 0:
+            return None
+
+        xy_center = np.median(points[:, :2], axis=0)
+        dbh_radius = self.estimate_stem_radius(points, z_min, fallback_center=xy_center)
+        crown_base = self.estimate_crown_base(points, z_min, z_max, dbh_radius, xy_center)
+
+        stem_height = max(crown_base - z_min, 0.0)
+        crown_height = max(z_max - crown_base, 0.0)
+        crown_points = points[points[:, 2] >= crown_base]
+        crown_radius = self.estimate_crown_radius(crown_points)
+
+        stem_volume = np.pi * (dbh_radius ** 2) * stem_height
+        crown_volume = (np.pi * (crown_radius ** 2) * crown_height) / 3
+
+        neural_class = "Дерево" if neural_label == 1 else "Не дерево" if neural_label == 0 else "Не определено"
+        if neural_prediction and neural_prediction.get("total_votes", 0) > 0:
+            votes_text = (
+                f"{neural_prediction['tree_votes']}/{neural_prediction['total_votes']} "
+                f"({neural_prediction['confidence'] * 100:.0f}%)"
+            )
+            neural_class = f"{neural_class} [{votes_text}]"
+
+        results = {
+            'NeuralClass': neural_class,
+            'StemRadius': dbh_radius,
+            'StemHeight': stem_height,
+            'CrownRadius': crown_radius,
+            'CrownHeight': crown_height,
+            'StemVolume': stem_volume,
+            'CrownVolume': crown_volume,
+            'TreeVolume': stem_volume + crown_volume,
+            'points_count': len(points),
+        }
 
         if self.calculate_height:
-            z_min = np.min(points[:, 2])
-            z_max = np.max(points[:, 2])
-            results['Height'] = z_max - z_min
+            results['Height'] = total_height
 
         if self.calculate_dbh:
-            z_min = np.min(points[:, 2])
-            dbh_section_height = z_min + self.dbh_height
-            dbh_section_thickness = 0.1
-
-            z_filter = (points[:, 2] >= dbh_section_height - dbh_section_thickness / 2) & \
-                       (points[:, 2] <= dbh_section_height + dbh_section_thickness / 2)
-            dbh_points = points[z_filter, :]
-
-            if len(dbh_points) < 10:
-                results['DBH'] = "Недостаточно точек для DBH"
-            else:
-                xy_points = dbh_points[:, :2]
-                center_x, center_y = np.mean(xy_points, axis=0)
-                radii = np.sqrt((xy_points[:, 0] - center_x) ** 2 + (xy_points[:, 1] - center_y) ** 2)
-                results['DBH'] = np.median(radii) * 2
+            results['DBH'] = dbh_radius * 2 if dbh_radius > 0 else "Недостаточно точек для DBH"
 
         return results
+
+    def estimate_stem_radius(self, points, z_min, fallback_center):
+        dbh_section_height = z_min + self.dbh_height
+        dbh_section_thickness = 0.1
+        z_filter = (points[:, 2] >= dbh_section_height - dbh_section_thickness / 2) & \
+                   (points[:, 2] <= dbh_section_height + dbh_section_thickness / 2)
+        dbh_points = points[z_filter]
+
+        if len(dbh_points) < 10:
+            lower_limit = z_min + max(self.dbh_height, 0.2)
+            dbh_points = points[(points[:, 2] >= z_min) & (points[:, 2] <= lower_limit)]
+
+        if len(dbh_points) < 3:
+            return 0.0
+
+        center_xy = np.median(dbh_points[:, :2], axis=0) if len(dbh_points) >= 10 else fallback_center
+        radii = np.linalg.norm(dbh_points[:, :2] - center_xy, axis=1)
+        return float(np.median(radii))
+
+    def estimate_crown_base(self, points, z_min, z_max, stem_radius, xy_center):
+        height = z_max - z_min
+        if height <= 0:
+            return z_min
+
+        bins_count = max(8, min(32, int(np.sqrt(len(points)))))
+        bins = np.linspace(z_min, z_max, bins_count + 1)
+        crown_threshold = max(stem_radius * 2.5, 0.35)
+
+        for low, high in zip(bins[:-1], bins[1:]):
+            if low < z_min + self.dbh_height:
+                continue
+
+            layer_points = points[(points[:, 2] >= low) & (points[:, 2] < high)]
+            if len(layer_points) < 10:
+                continue
+
+            layer_radii = np.linalg.norm(layer_points[:, :2] - xy_center, axis=1)
+            if np.percentile(layer_radii, 75) >= crown_threshold:
+                return float(low)
+
+        return float(z_min + height * 0.55)
+
+    def estimate_crown_radius(self, crown_points):
+        if len(crown_points) < 3:
+            return 0.0
+
+        center_xy = np.median(crown_points[:, :2], axis=0)
+        radii = np.linalg.norm(crown_points[:, :2] - center_xy, axis=1)
+        return float(np.percentile(radii, 90))
 
 
 # TreeTaxationLogic - это класс для реализации таксации
@@ -151,14 +232,12 @@ def taxation_dock_widget(self):
         layout = QVBoxLayout()
 
         # Параметры таксации и настройки
-        layout.addWidget(QLabel("⚙️ Параметры для расчета:"))
+        layout.addWidget(QLabel("⚙️ Нейросетевая таксация PointNet++:"))
         params_layout = QGridLayout()
 
         # Чекбоксы для выбора параметров
         self.checkbox_dbh = QCheckBox("Диаметр на высоте груди (DBH)")
         self.checkbox_height = QCheckBox("Высота")
-        # Ширину кроны оставим для будущей реализации
-        # self.checkbox_volume = QCheckBox("Ширина кроны")
 
         self.checkbox_dbh.setChecked(True)
         self.checkbox_height.setChecked(True)
@@ -204,10 +283,11 @@ def taxation_dock_widget(self):
         """)
         scroll_area.setWidget(self.results_label)
         scroll_area.setWidgetResizable(True)
-        scroll_area.setMaximumHeight(200)  # Ограничиваем максимальную высоту
+        scroll_area.setMinimumHeight(260)
+        scroll_area.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        layout.addWidget(scroll_area)
+        layout.addWidget(scroll_area, 1)
 
         widget.setLayout(layout)
         taxation_dock.setWidget(widget)
@@ -265,7 +345,7 @@ def run_taxation_calculation(self):
         self.results_label.setText(format_taxation_results(invalid_clouds, calculate_dbh, calculate_height, dbh_height))
         return
 
-    self.results_label.setText("Расчет параметров таксации...")
+    self.results_label.setText("Запуск нейросетевой таксации...")
     self._taxation_worker = TaxationWorker(selected_clouds, calculate_dbh, calculate_height, dbh_height)
 
     def on_finished(worker_results):
@@ -288,13 +368,15 @@ def run_taxation_calculation(self):
 
 
 def format_taxation_results(all_results, calculate_dbh, calculate_height, dbh_height):
-    result_text = "✅ Результаты таксации:\n\n"
+    result_text = "✅ Результаты нейросетевой таксации:\n\n"
     
     for filename, results, error in all_results:
         if error:
             result_text += f"❌ {filename}: {error}\n\n"
         elif results:
             result_text += f"📊 {filename}:\n"
+            result_text += f"  - Класс PointNet++: {results['NeuralClass']}\n"
+            result_text += f"  - Количество точек: {results['points_count']}\n"
             if 'Height' in results and calculate_height:
                 result_text += f"  - Высота: {results['Height']:.2f} м\n"
             if 'DBH' in results and calculate_dbh:
@@ -302,6 +384,13 @@ def format_taxation_results(all_results, calculate_dbh, calculate_height, dbh_he
                     result_text += f"  - DBH: {results['DBH']} (на высоте {dbh_height:.1f} м)\n"
                 else:
                     result_text += f"  - DBH: {results['DBH']:.2f} м (на высоте {dbh_height:.1f} м)\n"
+            result_text += f"  - Радиус ствола: {results['StemRadius']:.3f} м\n"
+            result_text += f"  - Высота ствола: {results['StemHeight']:.2f} м\n"
+            result_text += f"  - Радиус кроны: {results['CrownRadius']:.2f} м\n"
+            result_text += f"  - Высота кроны: {results['CrownHeight']:.2f} м\n"
+            result_text += f"  - Объём ствола: {results['StemVolume']:.3f} м³\n"
+            result_text += f"  - Объём кроны: {results['CrownVolume']:.3f} м³\n"
+            result_text += f"  - Эффективный объём дерева: {results['TreeVolume']:.3f} м³\n"
             result_text += "\n"
 
     return result_text

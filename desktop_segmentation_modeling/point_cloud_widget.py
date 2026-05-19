@@ -28,6 +28,45 @@ class OpenGLWidget(QOpenGLWidget):
         self.vbo_data_models = {}
         self.render_metadata = {}
 
+    def _create_point_vbos(self, points_centered, colors):
+        self.makeCurrent()
+        try:
+            point_vbo = vbo.VBO(np.asarray(points_centered, dtype=np.float32))
+            color_vbo = vbo.VBO(np.asarray(colors, dtype=np.float32))
+        finally:
+            self.doneCurrent()
+        return point_vbo, color_vbo
+
+    def _release_vbo_entry(self, storage, filename):
+        if filename not in storage:
+            return
+        point_vbo, color_vbo, _ = storage.pop(filename)
+        if not self.isValid():
+            return
+        self.makeCurrent()
+        try:
+            for buffer in (point_vbo, color_vbo):
+                if buffer is not None:
+                    buffer.delete()
+        finally:
+            self.doneCurrent()
+
+    def release_point_cloud(self, filename):
+        self._release_vbo_entry(self.vbo_data, filename)
+        self.point_clouds.pop(filename, None)
+        self.render_metadata.pop(filename, None)
+
+    def release_model(self, filename):
+        self._release_vbo_entry(self.vbo_data_models, filename)
+        self.models.pop(filename, None)
+        self.render_metadata.pop(filename, None)
+
+    def reset_camera_view(self):
+        self.point_cloud_position = QPointF(0, 0)
+        self.rotation_x = 1
+        self.rotation_y = 1
+        self.rotation_z = 1
+        self.scale_factor = self.calculate_scale_factor_for_all()
 
     def load_point_cloud(self, filename):
         if filename not in self.point_clouds:
@@ -63,10 +102,8 @@ class OpenGLWidget(QOpenGLWidget):
         points_centered = self.center_points_for_display(raw_points)
         colors = np.asarray(colors, dtype=np.float32)
 
-        # Создание и сохранение VBO
-        point_vbo = vbo.VBO(points_centered)
-        color_vbo = vbo.VBO(colors)
-
+        self._release_vbo_entry(self.vbo_data, filename)
+        point_vbo, color_vbo = self._create_point_vbos(points_centered, colors)
         self.vbo_data[filename] = (point_vbo, color_vbo, len(points_centered))
         self.point_clouds[filename] = {
             'active': True,
@@ -106,8 +143,8 @@ class OpenGLWidget(QOpenGLWidget):
             return
 
         points_centered = self.center_points_for_display(points)
-        point_vbo = vbo.VBO(points_centered)
-        color_vbo = vbo.VBO(colors)
+        self._release_vbo_entry(self.vbo_data_models, filename)
+        point_vbo, color_vbo = self._create_point_vbos(points_centered, colors)
         self.vbo_data_models[filename] = (point_vbo, color_vbo, len(points_centered))
         self.models[filename] = {
             'active': True,
@@ -131,8 +168,8 @@ class OpenGLWidget(QOpenGLWidget):
             return
 
         colors = np.ones((len(points), 3), dtype=np.float32)
-        point_vbo = vbo.VBO(points)
-        color_vbo = vbo.VBO(colors)
+        self._release_vbo_entry(self.vbo_data_models, filename)
+        point_vbo, color_vbo = self._create_point_vbos(points, colors)
         self.vbo_data_models[filename] = (point_vbo, color_vbo, len(points))
         self.models[filename] = {
             'active': True,
@@ -156,15 +193,17 @@ class OpenGLWidget(QOpenGLWidget):
 
         points_centered = self.center_points_for_display(points)
         if colors is None:
-            colors = np.ones_like(points_centered, dtype=np.float32)
+            colors = np.ones((len(points_centered), 3), dtype=np.float32)
         else:
             colors = np.asarray(colors, dtype=np.float32)
+            if len(colors) != len(points_centered):
+                colors = np.ones((len(points_centered), 3), dtype=np.float32)
 
-        point_vbo = vbo.VBO(points_centered)
-        color_vbo = vbo.VBO(colors)
         if metadata is None:
-            metadata = self.build_render_metadata(full_data)
+            metadata = self.build_render_metadata(points_centered)
 
+        self._release_vbo_entry(self.vbo_data, filename)
+        point_vbo, color_vbo = self._create_point_vbos(points_centered, colors)
         self.vbo_data[filename] = (point_vbo, color_vbo, len(points_centered))
         self.point_clouds[filename] = {
             'active': True,
@@ -268,8 +307,7 @@ class OpenGLWidget(QOpenGLWidget):
 
         # Отрисовка всех облаков точек
         for filename, cloud_info in self.point_clouds.items():
-            if cloud_info['active']:  # Проверяем, активно ли облако
-                if filename in self.vbo_data:
+            if cloud_info.get('active') and filename in self.vbo_data:
                     point_vbo, color_vbo, num_points = self.vbo_data[filename]
                     point_vbo.bind()
                     glVertexPointer(3, GL_FLOAT, 0, None)
@@ -292,20 +330,21 @@ class OpenGLWidget(QOpenGLWidget):
                         color_vbo.unbind()
                     point_vbo.unbind()
 
-        glEnableClientState(GL_VERTEX_ARRAY)
         # Отрисовка всех моделей
         for model, model_info in self.models.items():
-            if model_info['active']:  # Проверяем, активна ли модель для отображения
+            if model_info.get('active') and model in self.vbo_data_models:
                 vertex_vbo, color_vbo, num_indices = self.vbo_data_models[model]
 
                 vertex_vbo.bind()
                 glVertexPointer(3, GL_FLOAT, 0, None)
+                glEnableClientState(GL_VERTEX_ARRAY)
 
                 if self.use_light_background:
                     glColor3f(0.05, 0.05, 0.05)
                 else:
                     color_vbo.bind()
                     glColorPointer(3, GL_FLOAT, 0, None)
+                    glEnableClientState(GL_COLOR_ARRAY)
                 glPushMatrix()
 
                 # Отрисовываем с использованием индексного буфера
@@ -318,8 +357,10 @@ class OpenGLWidget(QOpenGLWidget):
                     glColor3f(1.0, 1.0, 1.0)
                 else:
                     color_vbo.unbind()
+                    glDisableClientState(GL_COLOR_ARRAY)
 
-        glDisableClientState(GL_VERTEX_ARRAY)
+                glDisableClientState(GL_VERTEX_ARRAY)
+
         glPopMatrix()
 
     def set_scale_factor(self, scale):

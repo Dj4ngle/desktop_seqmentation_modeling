@@ -72,7 +72,8 @@ def farthest_point_sample(xyz, npoint):
     B, N, C = xyz.shape
     centroids = torch.zeros(B, npoint, dtype=torch.long).to(device)
     distance = torch.ones(B, N).to(device) * 1e10
-    farthest = torch.randint(0, N, (B,), dtype=torch.long).to(device)
+    # Deterministic start (lowest Z) so inference is stable between runs.
+    farthest = torch.argmin(xyz[:, :, 2], dim=1).to(device)
     batch_indices = torch.arange(B, dtype=torch.long).to(device)
     for i in range(npoint):
         centroids[:, i] = farthest
