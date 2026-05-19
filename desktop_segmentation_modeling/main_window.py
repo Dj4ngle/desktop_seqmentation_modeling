@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QMainWindow, QFileDialog, QListWidgetItem, QCheckBox
 from .Toolbar_Widgets import modeling
 from desktop_segmentation_modeling.config import base_path
 from desktop_segmentation_modeling.point_cloud_data import get_points_array_from_clouds
+from desktop_segmentation_modeling.point_cloud_io import read_pcd_points_and_colors, get_pcd_file_properties
 from .Toolbar_Widgets.design import Ui_MainWindow
 from .Toolbar_Widgets.console_manager import ConsoleManager
 from .menu_bar import MenuBar
@@ -105,15 +106,8 @@ class PointCloudLoadWorker(QThread):
         return points, colors, file_metadata
 
     def load_pcd(self):
-        pcd = o3d.io.read_point_cloud(self.file_path)
-        points = np.asarray(pcd.points)
-        colors = np.asarray(pcd.colors, dtype=np.float32) if pcd.has_colors() else np.ones_like(points, dtype=np.float32)
-        file_metadata = [
-            ("Цвета", "есть" if pcd.has_colors() else "нет"),
-            ("Нормали", "есть" if pcd.has_normals() else "нет"),
-            ("Источник", "файл"),
-        ]
-        return points, colors, file_metadata
+        points, colors, _ = read_pcd_points_and_colors(self.file_path)
+        return points, colors, get_pcd_file_properties(self.file_path)
 
     def build_render_metadata(self, points):
         min_bounds = np.min(points[:, :3], axis=0)
@@ -553,29 +547,17 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         if cached_metadata is not None:
             return cached_metadata
 
-        pcd = None
+        cached_metadata = self.openGLWidget.point_clouds.get(file_path, {}).get('file_metadata')
+        if cached_metadata is not None:
+            return cached_metadata
 
         if os.path.exists(file_path):
             try:
-                pcd = o3d.io.read_point_cloud(file_path)
+                return get_pcd_file_properties(file_path)
             except Exception as error:
                 return [("Ошибка чтения", error)]
-        else:
-            cloud_info = self.openGLWidget.point_clouds.get(file_path, {})
-            data = cloud_info.get('data')
-            if isinstance(data, o3d.geometry.PointCloud):
-                pcd = data
 
-        if pcd is None:
-            return [("Источник", "сгенерировано в приложении")]
-
-        properties = [
-            ("Цвета", "есть" if pcd.has_colors() else "нет"),
-            ("Нормали", "есть" if pcd.has_normals() else "нет"),
-            ("Источник", "файл" if os.path.exists(file_path) else "память приложения"),
-        ]
-
-        return properties
+        return [("Источник", "сгенерировано в приложении")]
 
     def format_sequence(self, values):
         try:

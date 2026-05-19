@@ -87,11 +87,9 @@ class OpenGLWidget(QOpenGLWidget):
             points = np.column_stack((las.x, las.y, las.z))
             colors = np.column_stack((las.red, las.green, las.blue)) / 255.0
         elif file_extension == '.pcd':
-            import open3d as o3d
+            from desktop_segmentation_modeling.point_cloud_io import read_pcd_points_and_colors
 
-            pcd = o3d.io.read_point_cloud(filename)
-            points = np.asarray(pcd.points)
-            colors = np.ones_like(points)  # Белый цвет по умолчанию
+            points, colors, _ = read_pcd_points_and_colors(filename)
         elif file_extension == '.csv':
             return
         else:

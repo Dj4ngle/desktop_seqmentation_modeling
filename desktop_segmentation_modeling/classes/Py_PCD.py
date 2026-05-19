@@ -19,8 +19,13 @@ class PointCloudPCD:
             if data_type == 'binary':
                 data = f.read()
                 arr = np.frombuffer(data, dtype=dtype, count=points)
+            elif data_type in ('binary_compressed', 'compressed'):
+                raise NotImplementedError(
+                    f"Формат PCD '{data_type}' не поддерживается встроенным читателем"
+                )
             elif data_type == 'ascii':
-                lines = f.read().decode('utf-8').splitlines()
+                text = _decode_pcd_text(f.read())
+                lines = [line for line in text.splitlines() if line.strip()]
                 arr = np.loadtxt(lines, dtype=dtype, max_rows=points)
             else:
                 raise NotImplementedError("Only 'binary' and 'ascii' data support implemented.")
@@ -63,6 +68,15 @@ class PointCloudPCD:
                         raise NotImplementedError(f"Unsupported PCD save type: {data_type}")
 
 
+def _decode_pcd_text(data):
+    for encoding in ("utf-8", "cp1251", "latin-1"):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return data.decode("utf-8", errors="replace")
+
+
 def _parse_pcd_header(file_path):
     """Parse metadata from PCD header. Returns (dict, data_offset)."""
     metadata = {}
@@ -76,15 +90,12 @@ def _parse_pcd_header(file_path):
             line = f.readline()
             if not line:
                 break
-            lstr = line.decode('utf-8').strip()
+            lstr = _decode_pcd_text(line).strip()
             offset += len(line)
             if lstr.startswith('#'):
                 continue
-            if lstr == 'DATA binary':
-                metadata['data'] = 'binary'
-                break
-            if lstr == 'DATA ascii':
-                metadata['data'] = 'ascii'
+            if lstr.startswith('DATA '):
+                metadata['data'] = lstr.split(' ', 1)[1].strip().lower()
                 break
             key, *vals = lstr.split()
             key = key.lower()
