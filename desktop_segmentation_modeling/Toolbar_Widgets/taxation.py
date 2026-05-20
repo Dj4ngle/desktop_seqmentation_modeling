@@ -7,7 +7,12 @@ import os
 from desktop_segmentation_modeling.point_cloud_data import get_points_array_from_clouds
 
 
-DEFAULT_TAXATION_MODEL = 'v5_cpl1-1024-rvc-s1024'
+# Лучший чекпоинт на тестах: одиночные tree_*.pcd 5/5, зал 0/5 (v5 на деревьях 0/5).
+TAXATION_CLASSIFIER_MODEL = 'cpl1-1024-rp-s1024-pn2'
+MIN_TREE_VOTE_RATIO = 0.8
+# Целый файл слишком большой / широкий — таксация одного дерева не имеет смысла.
+WHOLE_SCENE_MIN_POINT_COUNT = 250_000
+WHOLE_SCENE_MIN_XY_SPAN_M = 18.0
 
 
 class TaxationWorker(QThread):
@@ -25,13 +30,25 @@ class TaxationWorker(QThread):
         try:
             from desktop_segmentation_modeling.Coordinates.predict import StumpPredictor
 
-            predictor = StumpPredictor(DEFAULT_TAXATION_MODEL)
+            predictor = StumpPredictor(TAXATION_CLASSIFIER_MODEL)
             all_results = []
             for file_path, points in self.selected_clouds:
                 filename = os.path.basename(file_path)
-                neural_prediction = predictor.predict_points_detailed(points, votes=5)
-                neural_label = neural_prediction["label"]
-                results = self.calculate_tree_parameters(points, neural_label, neural_prediction)
+                model_predictions = {
+                    TAXATION_CLASSIFIER_MODEL: predictor.predict_points_detailed(points, votes=5),
+                }
+
+                neural_prediction = self.combine_model_predictions(model_predictions)
+                neural_label = neural_prediction['label']
+                if neural_label == 1 and self.is_whole_scene_not_single_tree(points):
+                    neural_label = 0
+                    neural_prediction = dict(neural_prediction)
+                    neural_prediction['label'] = 0
+                    neural_prediction['scene_rejected'] = True
+                if neural_label != 1:
+                    results = self.build_classification_only_result(points, neural_prediction, neural_label)
+                else:
+                    results = self.calculate_tree_parameters(points, neural_label, neural_prediction)
                 if not results:
                     all_results.append((filename, None, "Расчет не дал результатов"))
                 else:
@@ -41,10 +58,40 @@ class TaxationWorker(QThread):
         except Exception as error:
             self.error.emit(str(error))
 
+    def format_neural_class(self, neural_label, neural_prediction=None):
+        if neural_prediction and neural_prediction.get("scene_rejected"):
+            neural_class = "Не дерево (сцена / участок)"
+        else:
+            neural_class = "Дерево" if neural_label == 1 else "Не дерево" if neural_label == 0 else "Не определено"
+        if neural_prediction and neural_prediction.get("total_votes", 0) > 0:
+            votes_text = (
+                f"{neural_prediction['tree_votes']}/{neural_prediction['total_votes']} "
+                f"({neural_prediction['confidence'] * 100:.0f}%)"
+            )
+            neural_class = f"{neural_class} [{votes_text}]"
+            model_details = neural_prediction.get("model_details")
+            if model_details:
+                neural_class = f"{neural_class} | {model_details}"
+        return neural_class
+
+    def build_classification_only_result(self, points, neural_prediction, neural_label=0):
+        points = np.asarray(points, dtype=np.float32)
+        if points.ndim != 2 or points.shape[1] < 3 or len(points) == 0:
+            return None
+
+        return {
+            'NeuralClass': self.format_neural_class(neural_label, neural_prediction),
+            'points_count': len(points),
+            'skipped_taxation': True,
+        }
+
     def calculate_tree_parameters(self, points, neural_label, neural_prediction=None):
         points = np.asarray(points, dtype=np.float32)
         if points.ndim != 2 or points.shape[1] < 3 or len(points) == 0:
             return None
+
+        if neural_label != 1:
+            return self.build_classification_only_result(points, neural_prediction, neural_label)
 
         z_min = float(np.min(points[:, 2]))
         z_max = float(np.max(points[:, 2]))
@@ -53,8 +100,8 @@ class TaxationWorker(QThread):
             return None
 
         xy_center = np.median(points[:, :2], axis=0)
-        dbh_radius = self.estimate_stem_radius(points, z_min, fallback_center=xy_center)
-        crown_base = self.estimate_crown_base(points, z_min, z_max, dbh_radius, xy_center)
+        dbh_radius, stem_xy = self.estimate_stem_center_and_radius(points, z_min, xy_center)
+        crown_base = self.estimate_crown_base(points, z_min, z_max, dbh_radius, stem_xy)
 
         stem_height = max(crown_base - z_min, 0.0)
         crown_height = max(z_max - crown_base, 0.0)
@@ -64,13 +111,7 @@ class TaxationWorker(QThread):
         stem_volume = np.pi * (dbh_radius ** 2) * stem_height
         crown_volume = (np.pi * (crown_radius ** 2) * crown_height) / 3
 
-        neural_class = "Дерево" if neural_label == 1 else "Не дерево" if neural_label == 0 else "Не определено"
-        if neural_prediction and neural_prediction.get("total_votes", 0) > 0:
-            votes_text = (
-                f"{neural_prediction['tree_votes']}/{neural_prediction['total_votes']} "
-                f"({neural_prediction['confidence'] * 100:.0f}%)"
-            )
-            neural_class = f"{neural_class} [{votes_text}]"
+        neural_class = self.format_neural_class(neural_label, neural_prediction)
 
         results = {
             'NeuralClass': neural_class,
@@ -92,7 +133,11 @@ class TaxationWorker(QThread):
 
         return results
 
-    def estimate_stem_radius(self, points, z_min, fallback_center):
+    def estimate_stem_center_and_radius(self, points, z_min, fallback_center):
+        """
+        Ось ствола и радиус на высоте DBH. Медиана по всему облаку смещена к кроне,
+        поэтому для поиска основания кроны нужен центр именно среза ствола.
+        """
         dbh_section_height = z_min + self.dbh_height
         dbh_section_thickness = 0.1
         z_filter = (points[:, 2] >= dbh_section_height - dbh_section_thickness / 2) & \
@@ -104,32 +149,75 @@ class TaxationWorker(QThread):
             dbh_points = points[(points[:, 2] >= z_min) & (points[:, 2] <= lower_limit)]
 
         if len(dbh_points) < 3:
-            return 0.0
+            return 0.0, fallback_center
 
         center_xy = np.median(dbh_points[:, :2], axis=0) if len(dbh_points) >= 10 else fallback_center
         radii = np.linalg.norm(dbh_points[:, :2] - center_xy, axis=1)
-        return float(np.median(radii))
+        return float(np.median(radii)), center_xy
 
-    def estimate_crown_base(self, points, z_min, z_max, stem_radius, xy_center):
+    def is_whole_scene_not_single_tree(self, points):
+        points = np.asarray(points, dtype=np.float32)
+        if points.ndim != 2 or points.shape[1] < 3 or len(points) == 0:
+            return False
+
+        xy_span = float(np.max(np.ptp(points[:, :2], axis=0)))
+        if xy_span >= WHOLE_SCENE_MIN_XY_SPAN_M:
+            return True
+        return len(points) >= WHOLE_SCENE_MIN_POINT_COUNT
+
+    def combine_model_predictions(self, model_predictions):
+        prediction = model_predictions[TAXATION_CLASSIFIER_MODEL]
+        tree_votes = int(prediction.get("tree_votes", 0))
+        total_votes = int(prediction.get("total_votes", 0))
+        confidence = float(prediction.get("confidence", 0.0))
+        label = 1 if confidence >= MIN_TREE_VOTE_RATIO else 0
+        short_name = TAXATION_CLASSIFIER_MODEL.split("-")[0]
+
+        return {
+            "label": label,
+            "tree_votes": tree_votes,
+            "total_votes": total_votes,
+            "confidence": confidence,
+            "model_details": f"{short_name}:{tree_votes}/{total_votes}",
+        }
+
+    def estimate_stem_radius(self, points, z_min, fallback_center):
+        radius, _ = self.estimate_stem_center_and_radius(points, z_min, fallback_center)
+        return radius
+
+    def estimate_crown_base(self, points, z_min, z_max, stem_radius, stem_xy_axis):
         height = z_max - z_min
         if height <= 0:
             return z_min
 
-        bins_count = max(8, min(32, int(np.sqrt(len(points)))))
+        bins_count = max(16, min(48, int(height / 0.5)))
         bins = np.linspace(z_min, z_max, bins_count + 1)
-        crown_threshold = max(stem_radius * 2.5, 0.35)
+        min_search_z = z_min + self.dbh_height
+        min_crown_radius = max(stem_radius * 4.0, 0.8)
+        min_relative_jump = 0.75
 
+        layer_stats = []
         for low, high in zip(bins[:-1], bins[1:]):
-            if low < z_min + self.dbh_height:
+            if high <= min_search_z:
                 continue
 
             layer_points = points[(points[:, 2] >= low) & (points[:, 2] < high)]
             if len(layer_points) < 10:
                 continue
 
-            layer_radii = np.linalg.norm(layer_points[:, :2] - xy_center, axis=1)
-            if np.percentile(layer_radii, 75) >= crown_threshold:
-                return float(low)
+            layer_radii = np.linalg.norm(layer_points[:, :2] - stem_xy_axis, axis=1)
+            layer_stats.append((float(low), float(np.percentile(layer_radii, 75))))
+
+        if len(layer_stats) < 2:
+            return float(z_min + height * 0.55)
+
+        for index in range(1, len(layer_stats)):
+            prev_z, prev_radius = layer_stats[index - 1]
+            curr_z, curr_radius = layer_stats[index]
+            relative_jump = (curr_radius - prev_radius) / max(prev_radius, 1e-6)
+
+            if relative_jump >= min_relative_jump and curr_radius >= min_crown_radius:
+                return curr_z
 
         return float(z_min + height * 0.55)
 
@@ -377,6 +465,9 @@ def format_taxation_results(all_results, calculate_dbh, calculate_height, dbh_he
             result_text += f"📊 {filename}:\n"
             result_text += f"  - Класс PointNet++: {results['NeuralClass']}\n"
             result_text += f"  - Количество точек: {results['points_count']}\n"
+            if results.get('skipped_taxation'):
+                result_text += "  - Таксационные параметры не рассчитывались: объект не распознан как дерево.\n\n"
+                continue
             if 'Height' in results and calculate_height:
                 result_text += f"  - Высота: {results['Height']:.2f} м\n"
             if 'DBH' in results and calculate_dbh:
