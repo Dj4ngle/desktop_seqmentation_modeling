@@ -15,8 +15,11 @@ class PCD_AREA(PCD):
         self.polygons = polygons
         self.shp_ply = Polygon(shp_poly)
 
+    @staticmethod
+    def _should_stop(should_stop):
+        return bool(should_stop and should_stop())
             
-    def vor_regions(self, verbose = False):
+    def vor_regions(self, verbose = False, should_stop=None):
         arr_x1_well = np.array(self.coordinates[:, 0], dtype='float')
         arr_y1_well = np.array(self.coordinates[:, 1], dtype='float')
         vor_points = np.array([arr_x1_well, arr_y1_well]).transpose()
@@ -24,6 +27,8 @@ class PCD_AREA(PCD):
         regions, vertices = PCD_UTILS.voronoi_finite_polygons_2d(vor)
         polygons = []
         for region in regions:
+            if self._should_stop(should_stop):
+                return False
             poly = Polygon(vertices[region])
             intersct = poly.intersection(self.shp_ply)
             xintersct, yintersct = intersct.exterior.xy
@@ -43,6 +48,8 @@ class PCD_AREA(PCD):
             plt.xlim(vor.min_bound[0] - 0.1, vor.max_bound[0] + 0.1)
             plt.ylim(vor.min_bound[1] - 0.1, vor.max_bound[1] + 0.1)
             plt.show()
+
+        return True
    
     def poly_cut(self, polygon, mode = 'current', returned = 'tree', algo = 'cm_parallel'):
         idx_labels=np.where((self.points[:,0]>min(polygon[:,0])) & (self.points[:,0]<max(polygon[:,0])) & (self.points[:,1]>min(polygon[:,1])) & (self.points[:,1]<max(polygon[:,1])))

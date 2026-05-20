@@ -12,6 +12,7 @@ from .Toolbar_Widgets.design import Ui_MainWindow
 from .Toolbar_Widgets.console_manager import ConsoleManager
 from .menu_bar import MenuBar
 from .Toolbar.tool_bar import ToolBar
+from .point_cloud_widget import POINT_CLOUD_PALETTE_LABELS
 
 
 def get_las_point_format_id(las):
@@ -45,14 +46,14 @@ class PointCloudLoadWorker(QThread):
         try:
             file_extension = os.path.splitext(self.file_path)[1].lower()
             if file_extension == ".las":
-                points, colors, file_metadata = self.load_las()
+                points, colors, file_metadata, color_scalar = self.load_las()
             elif file_extension == ".pcd":
-                points, colors, file_metadata = self.load_pcd()
+                points, colors, file_metadata, color_scalar = self.load_pcd()
             else:
                 self.error.emit(self.file_path, f"Неподдерживаемый формат файла: {file_extension}")
                 return
 
-            render_metadata = self.build_render_metadata(points)
+            render_metadata = self.build_render_metadata(points, color_scalar=color_scalar)
             self.loaded.emit(self.file_path, points, colors, render_metadata, file_metadata)
         except Exception as error:
             self.error.emit(self.file_path, str(error))
@@ -103,22 +104,26 @@ class PointCloudLoadWorker(QThread):
         except Exception:
             pass
 
-        return points, colors, file_metadata
+        return points, colors, file_metadata, intensity
 
     def load_pcd(self):
-        points, colors, _ = read_pcd_points_and_colors(self.file_path)
-        return points, colors, get_pcd_file_properties(self.file_path)
+        points, colors, pcd_metadata = read_pcd_points_and_colors(self.file_path)
+        color_scalar = pcd_metadata.get("color_scalar") if isinstance(pcd_metadata, dict) else None
+        return points, colors, get_pcd_file_properties(self.file_path), color_scalar
 
-    def build_render_metadata(self, points):
+    def build_render_metadata(self, points, color_scalar=None):
         min_bounds = np.min(points[:, :3], axis=0)
         max_bounds = np.max(points[:, :3], axis=0)
         size = max_bounds - min_bounds
-        return {
+        metadata = {
             'min': min_bounds,
             'max': max_bounds,
             'center': (min_bounds + max_bounds) / 2,
             'max_size': float(np.max(size)),
         }
+        if color_scalar is not None and len(color_scalar) == len(points):
+            metadata['color_scalar'] = np.asarray(color_scalar, dtype=np.float32)
+        return metadata
 
     def get_las_dimension(self, las, name):
         try:
@@ -590,6 +595,44 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             dock_widget.show()
         self.apply_adaptive_dock_sizes()
 
+    def get_checked_point_cloud_files(self):
+        selected_files = []
+        for index in range(self.listWidget.count()):
+            item = self.listWidget.item(index)
+            checkbox = self.listWidget.itemWidget(item)
+            if not checkbox or not checkbox.isChecked():
+                continue
+
+            file_path = checkbox.property("filePath")
+            file_extension = os.path.splitext(file_path)[1].lower()
+            if file_extension in (".las", ".pcd"):
+                selected_files.append(file_path)
+
+        return selected_files
+
+    def apply_selected_point_cloud_palette(self, palette_name):
+        selected_files = self.get_checked_point_cloud_files()
+        if not selected_files:
+            print("Нет выбранных облаков точек для покраски.")
+            return
+
+        for file_path in selected_files:
+            self.openGLWidget.set_point_cloud_palette(file_path, palette_name)
+
+        palette_label = POINT_CLOUD_PALETTE_LABELS.get(palette_name, palette_name)
+        print(f"Покраска применена: {palette_label}; файлов: {len(selected_files)}.")
+
+    def reset_selected_point_cloud_palette(self):
+        selected_files = self.get_checked_point_cloud_files()
+        if not selected_files:
+            print("Нет выбранных облаков точек для сброса покраски.")
+            return
+
+        for file_path in selected_files:
+            self.openGLWidget.clear_point_cloud_palette(file_path)
+
+        print(f"Покраска сброшена; файлов: {len(selected_files)}.")
+
     def save_selected_tree(self):
         selected_files = []
         for index in range(self.listWidget.count()):
@@ -684,4 +727,3 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
                 else:
                     print(f"Неподдерживаемый формат файла: {file_path}")
-        

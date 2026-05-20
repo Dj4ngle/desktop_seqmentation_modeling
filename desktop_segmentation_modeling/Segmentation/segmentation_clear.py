@@ -12,6 +12,15 @@ def makedirs_if_not_exist(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
+
+def _show_progress(ss):
+    return bool(getattr(ss, "show_progress", False))
+
+
+def _should_stop(should_stop):
+    return bool(should_stop and should_stop())
+
+
 def clustering(pc_tree):
     P = pd.DataFrame(pc_tree.points, columns = ['X','Y','Z'])
     X = np.asarray(P)
@@ -22,16 +31,17 @@ def clustering(pc_tree):
         labels = np.zeros(pc_tree.points.shape[0])
     return labels
 
-def segmentation_clear(ss, tr_val, multiplier):
+def segmentation_clear(ss, tr_val, multiplier, should_stop=None):
     path_file_save = os.path.join(ss.path_base, ss.step1_folder_name, ss.step2_folder_name, ss.step3_folder_name)
     makedirs_if_not_exist(path_file_save)
 
     fname_root = os.path.splitext(os.path.basename(ss.fname_points))[0]
     path_csv = os.path.join(ss.path_base, f"{fname_root}_res.csv")
-    print(path_csv)
 
     path_file = os.path.join(ss.path_base, ss.step1_folder_name, ss.step2_folder_name)
     df = pd.read_csv(path_csv, sep=';')
+    if _should_stop(should_stop):
+        return []
 
     def meets_criteria(row, threshold, count_required):
         count = sum(row[["Labels_int7000", "Labels_int5000", "Labels_int1000"]] >= threshold)
@@ -40,18 +50,22 @@ def segmentation_clear(ss, tr_val, multiplier):
     count_required = multiplier
     df = df[df.apply(meets_criteria, axis=1, threshold=tr_val, count_required=count_required)]
 
-    print(f"Number of points after filtering: {len(df)}")
+    print(f"Финальная очистка сегментов: кандидатов после фильтра {len(df)}.")
     if len(df) == 0:
-        print("No points meet the filtering criteria.")
+        print("Финальная очистка сегментов пропущена: нет подходящих кандидатов.")
         return []
 
     inum=0
 
     # Создаём список созданных файлов
     out_files = []
+    skipped_small_centers = 0
+    error_count = 0
 
     # Assuming this is part of your segmentation_clear function
-    for fname in tqdm(os.listdir(path_file)):
+    for fname in tqdm(sorted(os.listdir(path_file)), disable=not _show_progress(ss)):
+        if _should_stop(should_stop):
+            return out_files
         if fname.endswith('.pcd'):
             inum += 1
             if inum < ss.first_num:
@@ -60,11 +74,17 @@ def segmentation_clear(ss, tr_val, multiplier):
             try:
                 pc_tree = PCD_TREE()
                 pc_tree.open(os.path.join(path_file, fname))
+                if _should_stop(should_stop):
+                    return out_files
 
                 labels = clustering(pc_tree)
+                if _should_stop(should_stop):
+                    return out_files
 
                 min_z_values = []
                 for i in np.unique(labels):
+                    if _should_stop(should_stop):
+                        return out_files
                     if i > -1:
                         idx_layer = np.where(labels == i)
                         i_data = pc_tree.points[idx_layer]
@@ -78,6 +98,8 @@ def segmentation_clear(ss, tr_val, multiplier):
 
                 centers_labels = []
                 for i in range(min_z_values.shape[0]):
+                    if _should_stop(should_stop):
+                        return out_files
                     idx_layer = np.where(labels == i)
                     i_data = pc_tree.points[idx_layer]
                     center = PCD_UTILS.center_m(i_data[:, 0:2])
@@ -86,8 +108,7 @@ def segmentation_clear(ss, tr_val, multiplier):
 
                 # Check if we have enough centers for clustering
                 if centers_labels.shape[0] < 2:
-                    print(
-                        f"Not enough centers for clustering for file {fname}. Found {centers_labels.shape[0]} centers.")
+                    skipped_small_centers += 1
                     continue  # Skip this file or handle it as needed
 
                 x_value = df.loc[df['Name_tree'] == fname, 'X'].values[0]
@@ -108,6 +129,12 @@ def segmentation_clear(ss, tr_val, multiplier):
 
                     out_files.append(file_name_data_out)
             except Exception as e:
-                print(f"Error processing file {fname}: {e}")
+                error_count += 1
+                if getattr(ss, "verbose", False):
+                    print(f"Ошибка обработки файла {fname}: {e}")
 
+    print(
+        f"Финальная очистка сегментов: сохранено {len(out_files)} файлов, "
+        f"пропущено {skipped_small_centers}, ошибок {error_count}."
+    )
     return out_files

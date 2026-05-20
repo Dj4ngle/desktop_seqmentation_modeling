@@ -25,6 +25,10 @@ class CELL(PCD):
         self.big_cell_points = big_cell_points
         self.big_cell_intensity = big_cell_intensity
  
+    @staticmethod
+    def _should_stop(should_stop):
+        return bool(should_stop and should_stop())
+
     def make_cell_list(self, min, max, verbose = None):
         self.list_cell = []
         i = min[0]
@@ -82,14 +86,16 @@ class CELL(PCD):
         return list_for_consideration, cur_i_list_cell
 
     
-    def save_all_cells(self, path_file_save, verbose = None):              
+    def save_all_cells(self, path_file_save, verbose = None, should_stop=None):
         np_list_cell = np.asarray(self.list_cell)
         all_shape = np_list_cell.shape[0]
 
         big_cell_i = 0
         
-        with tqdm(total=all_shape) as pbar:
+        with tqdm(total=all_shape, disable=not verbose) as pbar:
             while np_list_cell.shape[0]>0:
+                if self._should_stop(should_stop):
+                    return False
                 cur_i_list_cell = 0
                 x_begin = np_list_cell[0][0]
                 y_begin = np_list_cell[0][1]
@@ -113,6 +119,8 @@ class CELL(PCD):
                     self.big_cell_intensity = np.hstack((self.big_cell_intensity, cell_intensity))
 
                     while len(list_for_consideration)>0:
+                        if self._should_stop(should_stop):
+                            return False
                         list_for_consideration, cur_i_list_cell = self.micro_cell(list_for_consideration, cur_i_list_cell, 'right')
                         list_for_consideration, cur_i_list_cell = self.micro_cell(list_for_consideration, cur_i_list_cell, 'left')
                         list_for_consideration, cur_i_list_cell = self.micro_cell(list_for_consideration, cur_i_list_cell, 'up')
@@ -157,6 +165,7 @@ class CELL(PCD):
 
                     pc_result = PCD(points = self.big_cell_points, intensity = self.big_cell_intensity)
                     pc_result.save(file_name_data_out)
+        return True
 
 
     def extract_stumps_labels(self):

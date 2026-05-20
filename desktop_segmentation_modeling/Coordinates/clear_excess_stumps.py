@@ -25,7 +25,15 @@ def makedirs_if_not_exist(path):
         os.makedirs(path)
 
 
-def clear_excess_stumps(cs):
+def _show_progress(cs):
+    return bool(getattr(cs, "show_progress", False))
+
+
+def _should_stop(should_stop):
+    return bool(should_stop and should_stop())
+
+
+def clear_excess_stumps(cs, should_stop=None):
     # Этот харкод тут был...
     model_name = 'int0000_7000-512-rlish-s4762'
 
@@ -40,8 +48,12 @@ def clear_excess_stumps(cs):
     column_names = first_n_columns.columns
     labels_matrix = np.full((df.shape[0], n), -1, dtype=np.int16)
     predictor = predict.StumpPredictor(model_name)
+    predicted_count = 0
+    missing_count = 0
 
-    for i in tqdm(range(n)):
+    for i in tqdm(range(n), disable=not _show_progress(cs)):
+        if _should_stop(should_stop):
+            return None
         parts = column_names[i].split("_")
         parts_int = parts[-1]
         if "." in parts_int:
@@ -51,7 +63,9 @@ def clear_excess_stumps(cs):
 
         rows_to_predict = []
         paths_to_predict = []
-        for j in tqdm(range(df.shape[0])):
+        for j in range(df.shape[0]):
+            if _should_stop(should_stop):
+                return None
             value = first_n_columns.at[j, column_names[i]]
             if value != "File__Not__Found":
                 path_file = os.path.join(path_int, value)
@@ -59,18 +73,21 @@ def clear_excess_stumps(cs):
                     rows_to_predict.append(j)
                     paths_to_predict.append(path_file)
                 else:
-                    print(f"No such file: {path_file}")
+                    missing_count += 1
                     labels_matrix[j, i] = -3
             elif value == "File__Not__Found":
                 labels_matrix[j, i] = -2
             else:
-                print("ERROR")
+                print("Ошибка: некорректное имя файла кандидата")
                 break
 
         if paths_to_predict:
             predicted_labels = predictor.predict_batch(paths_to_predict)
+            if _should_stop(should_stop):
+                return None
             for row_idx, label in zip(rows_to_predict, predicted_labels):
                 labels_matrix[row_idx, i] = label
+            predicted_count += len(paths_to_predict)
 
     df_labels = pd.DataFrame(data=labels_matrix, columns=names_col)
     df_result = pd.concat([df, df_labels], axis=1)
@@ -79,6 +96,9 @@ def clear_excess_stumps(cs):
     file_name = os.path.basename(cs.fname_points)
     save_pth = os.path.join(cs.path_base, file_name.partition('.')[0] + "_Clear_Excess.csv")
     save_pth = os.path.join(cs.path_base, save_pth)
+    if _should_stop(should_stop):
+        return None
     df_result.to_csv(save_pth, index = False, sep=';')
+    print(f"Классификация кандидатов: обработано {predicted_count}, пропущено {missing_count}.")
 
     return save_pth

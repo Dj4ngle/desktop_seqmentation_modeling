@@ -9,6 +9,7 @@ class CS():
                  cell_size=0.20,
                  height_limit_1=1.25, height_limit_2=1.35,
                  eps_XY=0.08, eps_Z=0.7,
+                 verbose=False, show_progress=False,
                  path_base=None,  # Всегда нужно задавать самому
                  fname_points=None,  # Всегда нужно задавать самому
                  fname_traj="traj.las",
@@ -31,6 +32,8 @@ class CS():
         self.height_limit_2 = height_limit_2
         self.eps_XY = eps_XY
         self.eps_Z = eps_Z
+        self.verbose = verbose
+        self.show_progress = show_progress
         self.path_base = path_base
         self.fname_points = fname_points
         self.fname_traj = fname_traj

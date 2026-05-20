@@ -130,6 +130,7 @@ setup(
     package_data={
         'desktop_segmentation_modeling': [
             'style.qss',
+            'style_light.qss',
             'images/*',
             'design.ui',
         ],

@@ -9,7 +9,9 @@ class SS():
         STEP=2.5,
         z_thresholds=[0.5, 0.625, 0.695, 0.75, 0.875, 1],
         eps_steps=[0.01, 0.15, 0.35, 0.5, 0.6, 0.7],
-        min_pts=[50, 50, 50, 50, 45, 40]
+        min_pts=[50, 50, 50, 50, 45, 40],
+        verbose=False,
+        show_progress=False,
     ):
         self.path_base = path_base
         self.fname_points = fname_points
@@ -20,6 +22,8 @@ class SS():
         self.z_thresholds = z_thresholds
         self.eps_steps = eps_steps
         self.min_pts = min_pts
+        self.verbose = verbose
+        self.show_progress = show_progress
 
         self.step1_folder_name = 'vor'
         self.step2_folder_name = 'ram'

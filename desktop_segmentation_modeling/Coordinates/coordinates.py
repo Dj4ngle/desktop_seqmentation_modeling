@@ -17,7 +17,25 @@ def makedirs_if_not_exist(path):
         os.makedirs(path)
 
 
-def coordinates(intensity_cut_make, cs):
+def _is_verbose(cs):
+    return bool(getattr(cs, "verbose", False))
+
+
+def _show_progress(cs):
+    return bool(getattr(cs, "show_progress", False))
+
+
+def _log(message, cs=None, verbose_only=False):
+    if verbose_only and cs is not None and not _is_verbose(cs):
+        return
+    print(message)
+
+
+def _should_stop(should_stop):
+    return bool(should_stop and should_stop())
+
+
+def coordinates(intensity_cut_make, cs, should_stop=None):
     # Извлекаем только имя файла
     file_name = os.path.basename(cs.fname_points)
 
@@ -36,30 +54,41 @@ def coordinates(intensity_cut_make, cs):
 
     if (cs.FLAG_cut_data or cs.FLAG_make_cells) and (cs.cut_data_method == 'flood_fill'):
         pc_traj = PCD()
-        pc_traj.open(file_name_traj)
+        pc_traj.open(file_name_traj, verbose=_is_verbose(cs))
         pc_traj.points = PCD_UTILS.shift(pc_traj.points, cs.x_shift, cs.y_shift, cs.z_shift)
 
     FlagShape = True
 
     if cs.FLAG_cut_data:
         pc_area = PCD_AREA()
-        pc_area.open(file_name_data, verbose=True)
+        pc_area.open(file_name_data, verbose=_is_verbose(cs))
+        if _should_stop(should_stop):
+            return False
         pc_area.points = PCD_UTILS.shift(pc_area.points, cs.x_shift, cs.y_shift, cs.z_shift)
+        source_points_count = pc_area.points.shape[0]
 
         try:
             shp_poly = PCD_UTILS.shp_open(file_shape)
             shp_poly = PCD_UTILS.shift(shp_poly, cs.x_shift, cs.y_shift, cs.z_shift)
         except:
-            print(
-                "Warning: File of area boundary not found. The boundaries of the area are selected as the entire loaded area.")
+            if not getattr(cs, "_shape_warning_printed", False):
+                _log("Предупреждение: файл границ не найден. Используются границы всего облака.")
+                cs._shape_warning_printed = True
             FlagShape = False
             shp_poly = PCD_UTILS.shp_create(pc_area)
 
-        print('Starting cutting main pcd ...')
-
-        print(f"Точек ДО фильтрации по интенсивности: {pc_area.points.shape}")
-        print(f"Минимальная интенсивность: {pc_area.intensity.min()}, Максимальная: {pc_area.intensity.max()}")
-        print(f"Порог отсечения intensity_cut_make: {intensity_cut_make}")
+        _log(
+            f"Подготовка облака: Z {cs.LOW:g}-{cs.UP:g} м, "
+            f"базовый intensity >= {cs.intensity_cut}",
+            cs,
+            verbose_only=True,
+        )
+        _log(
+            f"Исходных точек: {source_points_count}; "
+            f"интенсивность: {pc_area.intensity.min()}-{pc_area.intensity.max()}",
+            cs,
+            verbose_only=True,
+        )
 
         idx_labels = np.where((pc_area.points[:, 2] > cs.LOW) & (pc_area.points[:, 2] <= cs.UP))
         pc_area.index_cut(idx_labels)
@@ -69,8 +98,11 @@ def coordinates(intensity_cut_make, cs):
 
         if FlagShape:
             pc_area = pc_area.poly_cut(shp_poly)
+            if _should_stop(should_stop):
+                return False
 
         pc_area.save(file_name_data_cut)
+        _log(f"Точек после подготовки: {pc_area.points.shape[0]}", cs, verbose_only=True)
 
     path_int = os.path.join(cs.path_base, 'int' + str(intensity_cut_make))
     makedirs_if_not_exist(path_int)
@@ -79,11 +111,8 @@ def coordinates(intensity_cut_make, cs):
     makedirs_if_not_exist(path_file_cells)
 
     if cs.FLAG_make_cells:
-
-        print(f"Точек ДО фильтрации по интенсивности: {pc_area.points.shape}")
-        print(f"Минимальная интенсивность: {pc_area.intensity.min()}, Максимальная: {pc_area.intensity.max()}")
-        print(f"Порог отсечения intensity_cut_make: {intensity_cut_make}")
-
+        if _should_stop(should_stop):
+            return False
         if not cs.FLAG_cut_data:
             pc_area = PCD_AREA()
             pc_area.open(file_name_data_cut)
@@ -99,20 +128,29 @@ def coordinates(intensity_cut_make, cs):
         if cs.FLAG_cut_data:
             idx_labels = np.where(pc_area.intensity >= intensity_cut_make)
             pc_area.index_cut(idx_labels)
+            _log(f"Точек для текущего порога: {pc_area.points.shape[0]}")
 
-        print('Starting extracting areas (cells) traj-based ...')
+        _log(f"Разбиение на области: {cs.cut_data_method}", cs, verbose_only=True)
 
         if cs.cut_data_method == 'voronoi_tessellation':
             vortes = VOR_TES(points=pc_area.points, intensity=pc_area.intensity, algo=cs.algo, n_clusters=cs.n_clusters,
-                             intensity_cut=cs.intensity_cut_vor_tes)
+                             intensity_cut=cs.intensity_cut_vor_tes, verbose=_is_verbose(cs),
+                             show_progress=_show_progress(cs), should_stop=should_stop)
+            if _should_stop(should_stop):
+                return False
             vortes.select_borders(path_file_cells, shp_poly, verbose=False)
+            if _should_stop(should_stop):
+                return False
             vortes.select_clusters(path_file_cells)
+            if _should_stop(should_stop):
+                return False
 
         elif cs.cut_data_method == 'flood_fill':
             cell = CELL(points=pc_area.points, intensity=pc_area.intensity, points_traj=pc_traj.points,
                         cell_size=cs.cell_size)
-            cell.make_cell_list(pc_area.points.min(axis=0), pc_area.points.max(axis=0), verbose=True)
-            cell.save_all_cells(path_file_cells, verbose=True)
+            cell.make_cell_list(pc_area.points.min(axis=0), pc_area.points.max(axis=0), verbose=False)
+            if not cell.save_all_cells(path_file_cells, verbose=False, should_stop=should_stop):
+                return False
 
         elif cs.cut_data_method == 'none':
             path_file_stumps = os.path.join(cs.path_base, 'stumps')
@@ -122,7 +160,8 @@ def coordinates(intensity_cut_make, cs):
             raise Exception(
                 "There is no such algorithm. Choose from existing: 'voronoi_tessellation', 'flood_fill', 'none'")
 
-        print(f'\n {cs.n_clusters} areas (cells) have been saved to the folder {path_file_cells}')
+        num_cells = len([name for name in os.listdir(path_file_cells) if name.endswith('.pcd')])
+        _log(f"Областей для анализа: {num_cells}")
 
     if cs.FLAG_make_stumps:
 
@@ -134,12 +173,13 @@ def coordinates(intensity_cut_make, cs):
         path_file_stumps = os.path.join(path_file_cells, 'stumps')
         makedirs_if_not_exist(path_file_stumps)
 
-        print(f'Starting stump extracting from areas (cells) ...')
+        _log(f"Поиск пней при intensity >= {intensity_cut_make}...")
 
         tfni = 0
-        for filename in tqdm(os.listdir(path_file_cells)):
+        for filename in tqdm(os.listdir(path_file_cells), disable=not _show_progress(cs)):
+            if _should_stop(should_stop):
+                return False
             if filename.endswith('.pcd'):
-                print(f'\n Extracting from {filename} cell ...')
                 if cs.cut_data_method == 'none':
                     path_cells = file_name_data
                 else:
@@ -147,10 +187,16 @@ def coordinates(intensity_cut_make, cs):
 
                 pc_cells = CELL()
                 pc_cells.open(path_cells)
+                if _should_stop(should_stop):
+                    return False
 
                 labels_stumps = pc_cells.extract_stumps_labels()
+                if _should_stop(should_stop):
+                    return False
 
-                for i in tqdm(np.unique(labels_stumps)):
+                for i in tqdm(np.unique(labels_stumps), disable=not _show_progress(cs), leave=False):
+                    if _should_stop(should_stop):
+                        return False
                     if i > -1:
                         pc_stump = CELL(pc_cells.points, pc_cells.intensity)
                         idx_label = np.where(labels_stumps == i)
@@ -164,14 +210,20 @@ def coordinates(intensity_cut_make, cs):
                             # pc_stump.save(fname_stumps_out)
 
                             pc_stump.points, pc_stump.intensity = PCD_UTILS.SOR(pc_stump.points, pc_stump.intensity)
+                            if _should_stop(should_stop):
+                                return False
 
                             # filename_stumps_out = 'int' + str(intensity_cut_make) + '_' + str(tfni).rjust(4, '0') + '.pcd'
                             # fname_stumps_out = os.path.join(path_file_stumps, 'after_sor', filename_stumps_out)
                             # pc_stump.save(fname_stumps_out)
 
                             labels_XY = pc_stump.labels_XY_dbscan(eps=cs.eps_XY)
+                            if _should_stop(should_stop):
+                                return False
 
                             for j in np.unique(labels_XY):
+                                if _should_stop(should_stop):
+                                    return False
                                 if j > -1:
                                     pc_stump_clear = CELL(pc_stump.points, pc_stump.intensity)
                                     idx_label = np.where(labels_XY == j)
@@ -180,10 +232,14 @@ def coordinates(intensity_cut_make, cs):
                                     height = pc_stump_clear.points.max(axis=0)[2] - pc_stump_clear.points.min(axis=0)[2]
                                     if height >= cs.height_limit_2:
                                         labels_Z = pc_stump_clear.label_Z_dbscan(eps=cs.eps_Z)
+                                        if _should_stop(should_stop):
+                                            return False
 
                                         max_shape = 0
                                         i_max_shape = -1
                                         for k in np.unique(labels_Z):
+                                            if _should_stop(should_stop):
+                                                return False
                                             if k >= -1:
                                                 pc_stump_verifiable = PCD(pc_stump_clear.points,
                                                                           pc_stump_clear.intensity)
@@ -219,7 +275,7 @@ def coordinates(intensity_cut_make, cs):
                                                     pc_stump_suitable_layer.index_cut(idx_layer)
 
                                                     try:
-                                                        xc, yc, r, _ = cf.hyper_fit(pc_stump_suitable_layer.points)
+                                                        xc, yc, r, _ = cf.hyper_fit(pc_stump_suitable_layer.points[:, :2])
                                                     except:
                                                         xc, yc, r, _ = 0, 0, 0, 0
                                                     r_list.append(r)
@@ -256,6 +312,8 @@ def coordinates(intensity_cut_make, cs):
                                                 filename_stumps_out = 'int' + str(intensity_cut_make) + '_' + str(
                                                     tfni).rjust(4, '0') + '.pcd'
                                                 fname_stumps_out = os.path.join(path_file_stumps, filename_stumps_out)
+                                                if _should_stop(should_stop):
+                                                    return False
                                                 pc_stump_suitable.save(fname_stumps_out)
 
                                                 TN.append(filename_stumps_out)
@@ -272,8 +330,12 @@ def coordinates(intensity_cut_make, cs):
 
         bd = pd.DataFrame({"Name_stump" + '_int' + str(intensity_cut_make): TN, "X": TCX, "Y": TCY,
                            "Diameter" + '_int' + str(intensity_cut_make): TD})
+        if _should_stop(should_stop):
+            return False
         bd.to_csv(file_name_csv, index=False, sep=';')
+        _log(f"Найдено кандидатов пней: {len(TN)}")
 
         file = open(os.path.join(cs.path_base, "coordinates_paths.txt"), "a")
         file.write("\n" + file_name_csv)
         file.close()
+    return True

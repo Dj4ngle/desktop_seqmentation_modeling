@@ -72,6 +72,9 @@ def _read_pcd_with_py_pcd(file_path):
     else:
         colors = np.ones((len(points), 3), dtype=np.float32)
 
+    if "intensity" in lowered:
+        metadata["color_scalar"] = data[:, lowered["intensity"]].astype(np.float32)
+
     return points, colors, metadata
 
 

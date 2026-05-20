@@ -9,11 +9,16 @@ from desktop_segmentation_modeling.classes.PCD_UTILS import PCD_UTILS
 from desktop_segmentation_modeling.classes.PCD import PCD
 
 class RAM():
-    def __init__(self, path_file, coordinates, combined_dataframe, ram = None):
+    def __init__(self, path_file, coordinates, combined_dataframe, ram = None, show_progress=False, should_stop=None):
         self.path_file = path_file
         self.coordinates = coordinates
         self.combined_dataframe = combined_dataframe
         self.ram = ram
+        self.show_progress = show_progress
+        self.should_stop = should_stop
+
+    def _should_stop(self):
+        return bool(self.should_stop and self.should_stop())
 
     def search_labels(pc_tree, cluster_labels):
         centers_labels = []
@@ -48,13 +53,19 @@ class RAM():
 
     def accumulating(self):
         ram_chunks = []
-        for fname in tqdm(os.listdir(self.path_file)):
+        for fname in tqdm(sorted(os.listdir(self.path_file)), disable=not self.show_progress):
+            if self._should_stop():
+                return False
             if fname.endswith('.pcd'):
 
                 pc_tree = PCD_TREE()
                 pc_tree.open(os.path.join(self.path_file, fname))
+                if self._should_stop():
+                    return False
 
                 labels = RAM.clustering(pc_tree)
+                if self._should_stop():
+                    return False
                 
                 centers_labels, l_points = RAM.search_labels(pc_tree, labels)
 
@@ -80,6 +91,8 @@ class RAM():
 
                     ci = 0
                     for c in np.unique(labels):
+                        if self._should_stop():
+                            return False
                         if ((c != -1)&(c != main_cluster)):
                             i_layer=np.where(labels==c)
                             c_points = XP[i_layer]
@@ -100,13 +113,19 @@ class RAM():
         else:
             myRAM_list = np.empty((0, 5))
         self.ram = pd.DataFrame(myRAM_list, columns=['X', 'Y', 'Z', 'I', 'L'])
+        return True
 
     def exploitation(self, path_file_save):
-        for fname in tqdm(os.listdir(self.path_file)):
+        out_files = []
+        for fname in tqdm(sorted(os.listdir(self.path_file)), disable=not self.show_progress):
+            if self._should_stop():
+                return out_files
             if fname.endswith('.pcd'):
 
                 pc_tree = PCD_TREE()
                 pc_tree.open(os.path.join(self.path_file, fname))
+                if self._should_stop():
+                    return out_files
                 
                 x_value, y_value = self.get_xy_from_df(fname)
 
@@ -116,6 +135,8 @@ class RAM():
                 data_from_ram = np.asarray(data_from_ram)
 
                 labels = RAM.clustering(pc_tree)
+                if self._should_stop():
+                    return out_files
 
                 XP = pd.DataFrame(pc_tree.points, columns = ['X','Y','Z'])
                 XP['I'] = pc_tree.intensity
@@ -137,7 +158,10 @@ class RAM():
                     if data_from_ram.shape[0]>0:
                         data_from_ram = data_from_ram[:, :-1]
                         pc_result.concatenate(data_from_ram)
-                    pc_result.save(os.path.join(path_file_save, filename))
+                    file_name_data_out = os.path.join(path_file_save, filename)
+                    pc_result.save(file_name_data_out)
+                    out_files.append(file_name_data_out)
+        return out_files
 
 
 

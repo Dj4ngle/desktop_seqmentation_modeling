@@ -396,6 +396,8 @@ def run_coordinates(
         cs.fname_traj = trajectory_file
     else:
         cs.fname_traj = "traj.las"
+
+    open(os.path.join(output_dir, "coordinates_paths.txt"), "w", encoding="utf-8").close()
     
     # Выполняем обнаружение координат для каждого значения интенсивности
     print(f"Запуск обнаружения координат для файла: {point_cloud_path}")

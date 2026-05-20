@@ -43,6 +43,10 @@ class PCD_TREE(PCD):
         self.x_up = x_up
         self.y_up = y_up
 
+    @staticmethod
+    def _should_stop(should_stop):
+        return bool(should_stop and should_stop())
+
     def visual_layer(self, labels, main_cluster_id):
         p1 = pyvista.Plotter(window_size=[1000, 1000])
         
@@ -154,14 +158,19 @@ class PCD_TREE(PCD):
         offsetY = self.upper_coordinate[1] - self.lower_coordinate[1]
         self.offset = [offsetX, offsetY]
     
-    def process_layer(self, EPS, MIN_SAMPLES, verbose = False):
+    def process_layer(self, EPS, MIN_SAMPLES, verbose = False, should_stop=None):
+        if self._should_stop(should_stop):
+            return False
         if self.points.shape[0]>1:
             pc_chosen, main_cluster_id, lbls = self.search_main_cluster(EPS, MIN_SAMPLES)
+            if self._should_stop(should_stop):
+                return False
             self.search_upper_coordinate(pc_chosen, main_cluster_id = main_cluster_id, verbose = verbose, lbls = lbls)
         else:
             self.upper_coordinate = self.lower_coordinate
             self.points = np.asarray([[0,0,0]])
             self.intensity = [0]
+        return True
 
     def estimate_height(self):
         x_min, y_min, z_min = self.points.min(axis=0)

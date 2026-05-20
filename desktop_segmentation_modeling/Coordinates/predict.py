@@ -129,17 +129,20 @@ class StumpPredictor:
             "confidence": tree_votes / total_votes if total_votes else 0.0,
         }
 
-    def predict_batch(self, src_paths, batch_size=16):
+    def predict_batch(self, src_paths, batch_size=16, verbose=False):
         labels = [-1] * len(src_paths)
         batch = []
         batch_indices = []
+        error_count = 0
 
         for index, src in enumerate(src_paths):
             try:
                 batch.append(self.prepare_points(src))
                 batch_indices.append(index)
             except Exception as error:
-                print("Exception:", str(error))
+                error_count += 1
+                if verbose:
+                    print(f"Ошибка классификации {src}: {error}")
                 continue
 
             if len(batch) >= batch_size:
@@ -151,6 +154,9 @@ class StumpPredictor:
         if batch:
             for batch_index, label in zip(batch_indices, self._predict_prepared(batch)):
                 labels[batch_index] = label
+
+        if error_count:
+            print(f"Классификация: не удалось обработать {error_count} файлов.")
 
         return labels
 

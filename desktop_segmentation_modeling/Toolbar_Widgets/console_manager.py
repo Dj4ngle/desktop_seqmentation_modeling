@@ -1,7 +1,7 @@
 import sys
 from datetime import datetime, timedelta
 from PyQt6.QtCore import Qt, QObject, pyqtSignal, QTimer
-from PyQt6.QtWidgets import QDockWidget, QPlainTextEdit
+from PyQt6.QtWidgets import QDockWidget, QPlainTextEdit, QVBoxLayout, QWidget
 
 
 class ConsoleWriter(QObject):
@@ -15,13 +15,21 @@ class ConsoleWriter(QObject):
     
     def _write_message(self, message):
         """Слот для записи сообщения в консоль (выполняется в главном потоке)"""
-        if (isinstance(message, str) and message != '\n'):
+        if message == '\n':
+            return
+
+        if not isinstance(message, str):
+            self.console_widget.appendPlainText(str(message))
+            return
+
+        normalized_message = message.replace('\r', '\n')
+        for line in normalized_message.splitlines():
+            line = line.strip()
+            if not line:
+                continue
             time_now = datetime.utcnow() + timedelta(hours=3)
             time_str = time_now.strftime("%H:%M:%S")
-            message_with_time = f"[{time_str}] {message}"
-            self.console_widget.appendPlainText(message_with_time.strip())
-        elif message != '\n':
-            self.console_widget.appendPlainText(str(message))
+            self.console_widget.appendPlainText(f"[{time_str}] {line}")
 
 
 class ConsoleWidget(QPlainTextEdit):
@@ -53,22 +61,49 @@ class ConsoleWidget(QPlainTextEdit):
         self.writer.message_signal.emit(message)
 
 
+class ConsolePanel(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.console_widget = ConsoleWidget(self)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
+        layout.addWidget(self.console_widget)
+
+    def set_progress(self, value, message=None):
+        pass
+
+    def reset_progress(self, message="Готово"):
+        pass
+
+
 class ConsoleManager:
     def __init__(self, parent=None):
         self.parent = parent
+        self.consolePanel = None
         self.consoleWidget = None
 
     def create_console_dock_widget(self):
         dock = QDockWidget('Консоль', self.parent)
         dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
-        self.consoleWidget = ConsoleWidget()
-        dock.setWidget(self.consoleWidget)
+        self.consolePanel = ConsolePanel()
+        self.consoleWidget = self.consolePanel.console_widget
+        dock.setWidget(self.consolePanel)
         return dock
 
     def redirect_console_output(self):
         if self.consoleWidget:
             sys.stdout = ConsoleOutput(self.consoleWidget)
             sys.stderr = ConsoleOutput(self.consoleWidget)
+
+    def set_progress(self, value, message=None):
+        if self.consolePanel:
+            self.consolePanel.set_progress(value, message)
+
+    def reset_progress(self, message="Готово"):
+        if self.consolePanel:
+            self.consolePanel.reset_progress(message)
 
 
 class ConsoleOutput:

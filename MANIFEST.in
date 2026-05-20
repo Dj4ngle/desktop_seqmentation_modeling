@@ -3,6 +3,7 @@ include README.md
 include requirements.txt
 recursive-include desktop_segmentation_modeling/images *
 include desktop_segmentation_modeling/style.qss
+include desktop_segmentation_modeling/style_light.qss
 include desktop_segmentation_modeling/design.ui
 
 # Включаем только runtime-модели из checkpoints, без логов и training csv

@@ -5,6 +5,26 @@ from OpenGL.GL import *
 import numpy as np
 import os
 
+
+POINT_CLOUD_PALETTES = {
+    "blue": ((0.78, 0.90, 1.0), (0.05, 0.32, 0.72)),
+    "cyan": ((0.74, 0.95, 0.96), (0.02, 0.45, 0.58)),
+    "green": ((0.78, 0.93, 0.78), (0.10, 0.48, 0.22)),
+    "orange": ((1.0, 0.78, 0.38), (0.82, 0.27, 0.06)),
+    "violet": ((0.88, 0.82, 1.0), (0.36, 0.21, 0.72)),
+    "gray": ((0.86, 0.88, 0.91), (0.25, 0.29, 0.34)),
+}
+
+POINT_CLOUD_PALETTE_LABELS = {
+    "blue": "Синий градиент",
+    "cyan": "Голубой градиент",
+    "green": "Зелёный градиент",
+    "orange": "Оранжевый градиент",
+    "violet": "Фиолетовый градиент",
+    "gray": "Серый градиент",
+}
+
+
 class OpenGLWidget(QOpenGLWidget):
     def __init__(self, parent=None):
         super(OpenGLWidget, self).__init__(parent)
@@ -27,6 +47,7 @@ class OpenGLWidget(QOpenGLWidget):
         self.vbo_data = {}
         self.vbo_data_models = {}
         self.render_metadata = {}
+        self.point_cloud_palette_overrides = {}
 
     def _create_point_vbos(self, points_centered, colors):
         self.makeCurrent()
@@ -36,6 +57,13 @@ class OpenGLWidget(QOpenGLWidget):
         finally:
             self.doneCurrent()
         return point_vbo, color_vbo
+
+    def _create_color_vbo(self, colors):
+        self.makeCurrent()
+        try:
+            return vbo.VBO(np.asarray(colors, dtype=np.float32))
+        finally:
+            self.doneCurrent()
 
     def _release_vbo_entry(self, storage, filename):
         if filename not in storage:
@@ -55,6 +83,7 @@ class OpenGLWidget(QOpenGLWidget):
         self._release_vbo_entry(self.vbo_data, filename)
         self.point_clouds.pop(filename, None)
         self.render_metadata.pop(filename, None)
+        self.point_cloud_palette_overrides.pop(filename, None)
 
     def release_model(self, filename):
         self._release_vbo_entry(self.vbo_data_models, filename)
@@ -98,7 +127,8 @@ class OpenGLWidget(QOpenGLWidget):
 
         raw_points = np.asarray(points)
         points_centered = self.center_points_for_display(raw_points)
-        colors = np.asarray(colors, dtype=np.float32)
+        source_colors = np.asarray(colors, dtype=np.float32)
+        colors = self.resolve_point_cloud_colors(filename, points_centered, source_colors, raw_points, None)
 
         self._release_vbo_entry(self.vbo_data, filename)
         point_vbo, color_vbo = self._create_point_vbos(points_centered, colors)
@@ -107,6 +137,8 @@ class OpenGLWidget(QOpenGLWidget):
             'active': True,
             'data': points_centered,
             'full_data': raw_points,
+            'source_colors': source_colors,
+            'color_scalar': None,
             'metadata': self.build_render_metadata(raw_points),
         }
         self.render_metadata[filename] = self.point_clouds[filename]['metadata']
@@ -191,14 +223,23 @@ class OpenGLWidget(QOpenGLWidget):
 
         points_centered = self.center_points_for_display(points)
         if colors is None:
-            colors = np.ones((len(points_centered), 3), dtype=np.float32)
+            source_colors = np.ones((len(points_centered), 3), dtype=np.float32)
         else:
-            colors = np.asarray(colors, dtype=np.float32)
-            if len(colors) != len(points_centered):
-                colors = np.ones((len(points_centered), 3), dtype=np.float32)
+            source_colors = np.asarray(colors, dtype=np.float32)
+            if len(source_colors) != len(points_centered):
+                source_colors = np.ones((len(points_centered), 3), dtype=np.float32)
 
         if metadata is None:
             metadata = self.build_render_metadata(points_centered)
+
+        color_scalar = metadata.get('color_scalar') if isinstance(metadata, dict) else None
+        colors = self.resolve_point_cloud_colors(
+            filename,
+            points_centered,
+            source_colors,
+            full_data,
+            metadata,
+        )
 
         self._release_vbo_entry(self.vbo_data, filename)
         point_vbo, color_vbo = self._create_point_vbos(points_centered, colors)
@@ -207,10 +248,135 @@ class OpenGLWidget(QOpenGLWidget):
             'active': True,
             'data': points_centered,
             'full_data': full_data,
+            'source_colors': source_colors,
+            'color_scalar': color_scalar,
             'metadata': metadata,
         }
         self.render_metadata[filename] = metadata
         self.scale_factor = self.calculate_scale_factor_for_all()
+        self.update()
+
+    def resolve_point_cloud_colors(self, filename, points, source_colors, full_data=None, metadata=None):
+        palette_name = self.point_cloud_palette_overrides.get(filename)
+        if palette_name is None:
+            palette_name = "blue" if self.use_light_background else "orange"
+
+        return self.create_gradient_colors(
+            filename,
+            palette_name,
+            points=points,
+            full_data=full_data,
+            metadata=metadata,
+        )
+
+    def create_gradient_colors(self, filename, palette_name, points=None, full_data=None, metadata=None):
+        start_color, end_color = POINT_CLOUD_PALETTES.get(
+            palette_name,
+            POINT_CLOUD_PALETTES["blue"],
+        )
+        start_color = np.asarray(start_color, dtype=np.float32)
+        end_color = np.asarray(end_color, dtype=np.float32)
+
+        scalar = None
+        if isinstance(metadata, dict):
+            scalar = metadata.get('color_scalar')
+
+        if scalar is None:
+            cloud = self.point_clouds.get(filename, {})
+            scalar = cloud.get('color_scalar')
+
+        if scalar is None and full_data is not None:
+            full_data = np.asarray(full_data)
+            if full_data.ndim == 2 and full_data.shape[1] >= 3:
+                scalar = full_data[:, 2]
+
+        if scalar is None and points is not None:
+            points = np.asarray(points)
+            if points.ndim == 2 and points.shape[1] >= 3:
+                scalar = points[:, 2]
+
+        num_points = 0
+        if points is not None:
+            num_points = len(points)
+        elif filename in self.vbo_data:
+            num_points = self.vbo_data[filename][2]
+
+        if scalar is None or len(scalar) != num_points:
+            scalar = np.linspace(0.0, 1.0, num_points, dtype=np.float32)
+        else:
+            scalar = np.asarray(scalar, dtype=np.float32)
+
+        if len(scalar) == 0:
+            return np.empty((0, 3), dtype=np.float32)
+
+        finite_mask = np.isfinite(scalar)
+        if not np.any(finite_mask):
+            normalized = np.zeros_like(scalar, dtype=np.float32)
+        else:
+            finite_values = scalar[finite_mask]
+            min_value = float(np.min(finite_values))
+            max_value = float(np.max(finite_values))
+            if max_value == min_value:
+                normalized = np.zeros_like(scalar, dtype=np.float32)
+            else:
+                normalized = (scalar - min_value) / (max_value - min_value)
+                normalized = np.clip(normalized, 0.0, 1.0).astype(np.float32)
+
+        return start_color + normalized[:, None] * (end_color - start_color)
+
+    def refresh_point_cloud_colors(self):
+        for filename in list(self.point_clouds.keys()):
+            self.update_point_cloud_colors(filename)
+        self.update()
+
+    def update_point_cloud_colors(self, filename):
+        if filename not in self.point_clouds or filename not in self.vbo_data:
+            return
+
+        cloud = self.point_clouds[filename]
+        source_colors = cloud.get('source_colors')
+        points = cloud.get('data')
+        full_data = cloud.get('full_data')
+        metadata = cloud.get('metadata')
+        if source_colors is None or points is None:
+            return
+
+        colors = self.resolve_point_cloud_colors(
+            filename,
+            points,
+            source_colors,
+            full_data,
+            metadata,
+        )
+
+        point_vbo, old_color_vbo, num_points = self.vbo_data[filename]
+        if len(colors) != num_points:
+            return
+
+        if not self.isValid():
+            return
+
+        self.makeCurrent()
+        try:
+            if old_color_vbo is not None:
+                old_color_vbo.delete()
+            color_vbo = vbo.VBO(np.asarray(colors, dtype=np.float32))
+        finally:
+            self.doneCurrent()
+
+        self.vbo_data[filename] = (point_vbo, color_vbo, num_points)
+
+    def set_point_cloud_palette(self, filename, palette_name):
+        if palette_name not in POINT_CLOUD_PALETTES:
+            return
+
+        self.point_cloud_palette_overrides[filename] = palette_name
+        self.update_point_cloud_colors(filename)
+        self.update()
+
+    def clear_point_cloud_palette(self, filename):
+        self.point_cloud_palette_overrides.pop(filename, None)
+        self.update_point_cloud_colors(filename)
         self.update()
 
     def center_points_for_display(self, points):
@@ -291,7 +457,7 @@ class OpenGLWidget(QOpenGLWidget):
                 glClearColor(*self.background_color)
             finally:
                 self.doneCurrent()
-        self.update()
+        self.refresh_point_cloud_colors()
 
     def paintGL(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -306,27 +472,21 @@ class OpenGLWidget(QOpenGLWidget):
         # Отрисовка всех облаков точек
         for filename, cloud_info in self.point_clouds.items():
             if cloud_info.get('active') and filename in self.vbo_data:
-                    point_vbo, color_vbo, num_points = self.vbo_data[filename]
-                    point_vbo.bind()
-                    glVertexPointer(3, GL_FLOAT, 0, None)
-                    glEnableClientState(GL_VERTEX_ARRAY)
+                point_vbo, color_vbo, num_points = self.vbo_data[filename]
+                point_vbo.bind()
+                glVertexPointer(3, GL_FLOAT, 0, None)
+                glEnableClientState(GL_VERTEX_ARRAY)
 
-                    if self.use_light_background:
-                        glColor3f(0.05, 0.05, 0.05)
-                    else:
-                        color_vbo.bind()
-                        glColorPointer(3, GL_FLOAT, 0, None)
-                        glEnableClientState(GL_COLOR_ARRAY)
+                color_vbo.bind()
+                glColorPointer(3, GL_FLOAT, 0, None)
+                glEnableClientState(GL_COLOR_ARRAY)
 
-                    glDrawArrays(GL_POINTS, 0, num_points)
+                glDrawArrays(GL_POINTS, 0, num_points)
 
-                    glDisableClientState(GL_VERTEX_ARRAY)
-                    if self.use_light_background:
-                        glColor3f(1.0, 1.0, 1.0)
-                    else:
-                        glDisableClientState(GL_COLOR_ARRAY)
-                        color_vbo.unbind()
-                    point_vbo.unbind()
+                glDisableClientState(GL_VERTEX_ARRAY)
+                glDisableClientState(GL_COLOR_ARRAY)
+                color_vbo.unbind()
+                point_vbo.unbind()
 
         # Отрисовка всех моделей
         for model, model_info in self.models.items():
