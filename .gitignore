@@ -18,3 +18,11 @@ venv-bak/
 
 # macOS
 .DS_Store
+
+.idea/
+tmp/
+build/
+dist/
+*.egg-info/
+*.display.npz
+*.log

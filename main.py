@@ -1,18 +1,10 @@
-import os
-import sys
-from PyQt6.QtWidgets import QApplication
+import desktop_segmentation_modeling as dsm
 
-from config import base_path
-from main_window import MyMainWindow
+
+def main():
+    # Запуск графического приложения
+    dsm.run_app()
+
 
 if __name__ == "__main__":
-    app = QApplication([])
-
-    style_path = os.path.join(base_path, 'style.qss')
-
-    # Применяем стили
-    app.setStyleSheet(open(style_path).read())
-
-    main_window = MyMainWindow()
-    main_window.show()
-    app.exec()
+    main()
